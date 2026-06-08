@@ -1,0 +1,678 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect } from 'react';
+import { Match } from '../types';
+import { 
+  Sliders, RefreshCw, UserPlus, FileWarning, Calendar, Check, Search, 
+  ShieldAlert, Eye, EyeOff, Lock, Unlock, Users, Loader2 
+} from 'lucide-react';
+
+interface AdminPanelProps {
+  matches: Match[];
+  currentTime: string;
+  isSimulating: boolean;
+  onRefresh: () => void;
+  onNotify: (msg: string, type: 'success' | 'error') => void;
+  adminCode?: string;
+}
+
+export default function AdminPanel({
+  matches,
+  currentTime,
+  isSimulating,
+  onRefresh,
+  onNotify,
+  adminCode,
+}: AdminPanelProps) {
+  const [customTime, setCustomTime] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [updatingMatchId, setUpdatingMatchId] = useState<string | null>(null);
+  const [homeScoreInput, setHomeScoreInput] = useState('0');
+  const [awayScoreInput, setAwayScoreInput] = useState('0');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // States for player reading
+  const [playersList, setPlayersList] = useState<{ name: string; code: string; score: number; createdAt: string }[]>([]);
+  const [loadingPlayers, setLoadingPlayers] = useState(false);
+
+  // Filter matches for easy scoring
+  const filteredMatches = matches.filter((m) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      m.homeTeam.toLowerCase().includes(query) ||
+      m.awayTeam.toLowerCase().includes(query) ||
+      m.stage.toLowerCase().includes(query) ||
+      `trận ${m.id}`.includes(query)
+    );
+  });
+
+  // Fetch registered players with direct passcode access
+  const fetchPlayersList = async () => {
+    if (!adminCode) return;
+    setLoadingPlayers(true);
+    try {
+      const res = await fetch('/api/admin/players', {
+        headers: { 'x-admin-code': adminCode }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPlayersList(data.players || []);
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải danh sách người chơi:', err);
+    } finally {
+      setLoadingPlayers(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlayersList();
+  }, [adminCode, matches]);
+
+  // Call simulated time update
+  const handleSetTime = async (timeStr: string | null) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/time', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode || ''
+        },
+        body: JSON.stringify({ simulatedTime: timeStr, adminCode }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify(data.message || 'Cập nhật thời gian mô phỏng thành công!', 'success');
+        onRefresh();
+      } else {
+        onNotify(data.error || 'Lỗi cập nhật thời gian', 'error');
+      }
+    } catch (e) {
+      onNotify('Lỗi kết nối máy chủ', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Populate mock demo users & predictions
+  const handleGenerateDemo = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/generate-demo', { 
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode || ''
+        },
+        body: JSON.stringify({ adminCode })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify('Đã tạo thành công 10 người chơi mô phỏng cùng bảng tỷ số và 150+ dự đoán mẫu!', 'success');
+        onRefresh();
+      } else {
+        onNotify(data.error || 'Lỗi tạo dữ liệu mẫu', 'error');
+      }
+    } catch (e) {
+      onNotify('Lỗi kết nối máy chủ', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Full DB Reset
+  const handleResetDB = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/reset-db', { 
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode || ''
+        },
+        body: JSON.stringify({ adminCode })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify('Đã thiết lập lại cơ sở dữ liệu về trạng thái sạch ban đầu!', 'success');
+        setShowResetConfirm(false);
+        onRefresh();
+      } else {
+        onNotify(data.error || 'Lỗi đặt lại cơ sở dữ liệu', 'error');
+      }
+    } catch (e) {
+      onNotify('Lỗi kết nối máy chủ', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Submit Match Score
+  const handleUpdateScore = async (matchId: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/matches/update-score', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode || ''
+        },
+        body: JSON.stringify({
+          matchId,
+          homeScore: homeScoreInput,
+          awayScore: awayScoreInput,
+          status: 'FINISHED',
+          adminCode,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify(`Cập nhật tỉ số trận ${matchId} thành công! Người chơi đã được tự động tính điểm.`, 'success');
+        setUpdatingMatchId(null);
+        onRefresh();
+      } else {
+        onNotify(data.error || 'Lỗi cập nhật tỉ số', 'error');
+      }
+    } catch (e) {
+      onNotify('Lỗi kết nối máy chủ', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Toggle match visibility
+  const handleToggleVisibility = async (matchId: string, visible: boolean) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/matches/toggle-visibility', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode || ''
+        },
+        body: JSON.stringify({ matchId, visible, adminCode }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify(data.message, 'success');
+        onRefresh();
+      } else {
+        onNotify(data.error || 'Lỗi cấu hình hiển thị', 'error');
+      }
+    } catch (e) {
+      onNotify('Lỗi kết nối máy chủ', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Bulk visibility
+  const handleBulkVisibility = async (visible: boolean) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/matches/bulk-visibility', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode || ''
+        },
+        body: JSON.stringify({ visible, adminCode }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify(data.message, 'success');
+        onRefresh();
+      } else {
+        onNotify(data.error || 'Lỗi cấu hình hiển thị hàng loạt', 'error');
+      }
+    } catch (e) {
+      onNotify('Lỗi kết nối máy chủ', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startScoring = (match: Match) => {
+    setUpdatingMatchId(match.id);
+    setHomeScoreInput(String(match.homeScore ?? 0));
+    setAwayScoreInput(String(match.awayScore ?? 0));
+  };
+
+  return (
+    <div id="admin-panel-container" className="space-y-6 animate-fade-in">
+      
+      {/* Simulation Controls Card (Bento Rounded 3xl) */}
+      <div className="bg-slate-900 border border-emerald-500/20 rounded-3xl p-6 shadow-xl space-y-4">
+        
+        <div className="flex items-center space-x-3">
+          <div className="p-2.5 bg-emerald-500/10 rounded-2xl text-emerald-400">
+            <Sliders className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-100 font-display">Bảng Điều Khiển Giả Lập</h2>
+            <div className="text-[11px] text-slate-400 mt-0.5">Thời gian thực tế ảo & đổ mẫu hệ thống</div>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
+          Chào mừng đến với Trình quản lý Demo World Cup 2026. Để giúp bạn dễ dàng theo dõi trực quan và kiểm chứng quy luật khóa cổng dự đoán sau <strong>15 phút bóng lăn</strong>, bạn có thể chỉnh tương lai/quá khứ thời thế máy chủ ảo hoặc nạp sẵn nhóm người chơi cùng lịch sử đoán ảo để các bảng biểu, biểu đồ tranh tài được tô điểm lộng lẫy nhất.
+        </p>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-3">
+          
+          {/* Calendar Dials */}
+          <div className="space-y-3 bg-slate-950 p-5 rounded-2xl border border-slate-800">
+            <span className="block text-xs font-bold text-slate-300 uppercase tracking-wider">Cài Đặt Ngày Giờ Máy Chủ</span>
+            
+            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-900">
+              <span className="text-slate-400 font-medium">Chế độ hiện tại:</span>
+              <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded ${isSimulating ? 'bg-amber-500/10 text-amber-400 border border-amber-500/25' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}>
+                {isSimulating ? 'Thời Gian Giả Lập' : 'Giờ Hệ Thống Thật'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs py-1 pr-1">
+              <span className="text-slate-400 font-medium">Mốc thời gian máy chủ:</span>
+              <span className="text-slate-100 font-mono font-bold bg-slate-900/60 px-2 py-0.5 rounded border border-slate-850">
+                {new Date(currentTime).toLocaleString('vi-VN', { dateStyle: 'medium', timeStyle: 'medium' })}
+              </span>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <input
+                type="datetime-local"
+                value={customTime}
+                onChange={(e) => setCustomTime(e.target.value)}
+                className="bg-slate-900 text-xs text-slate-200 border border-slate-800 rounded-xl px-3.5 py-2.5 flex-grow focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => customTime && handleSetTime(new Date(customTime).toISOString())}
+                disabled={isLoading}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center space-x-1 hover:shadow-lg hover:shadow-emerald-950/20 active:scale-95 shrink-0"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Áp dụng</span>
+              </button>
+            </div>
+
+            <div className="pt-3 border-t border-slate-900 space-y-2">
+              <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dịch chuyển nhanh (Đường tắt):</span>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => handleSetTime(null)}
+                  className="bg-slate-900 hover:bg-slate-850 text-slate-300 text-[10px] py-1.5 px-2.5 rounded-lg font-bold border border-slate-800 hover:border-slate-700 transition"
+                >
+                  ⏱️ Hủy giả lập (Giờ thật)
+                </button>
+                <button
+                  onClick={() => handleSetTime('2026-06-08T12:00:00Z')}
+                  className="bg-slate-900 hover:bg-slate-850 text-slate-300 text-[10px] py-1.5 px-2.5 rounded-lg font-bold border border-slate-800 hover:border-slate-700 transition"
+                >
+                  📅 Trước khai mạc (08/06)
+                </button>
+                <button
+                  onClick={() => handleSetTime('2026-06-11T15:50:00Z')}
+                  className="bg-slate-900 hover:bg-slate-850 text-slate-300 text-[10px] py-1.5 px-2.5 rounded-lg font-bold border border-slate-800 hover:border-slate-700 transition"
+                >
+                  ⚽ Trận 1 khởi tranh (11/06)
+                </button>
+                <button
+                  onClick={() => handleSetTime('2026-06-11T16:10:00Z')}
+                  className="bg-slate-900 hover:bg-slate-850 text-amber-400 text-[10px] py-1.5 px-2.5 rounded-lg font-bold border border-amber-500/15 hover:border-amber-500/30 transition"
+                >
+                  🟢 Phút thứ 10 (Vẫn mở cổng đoán)
+                </button>
+                <button
+                  onClick={() => handleSetTime('2026-06-11T16:20:00Z')}
+                  className="bg-slate-900 hover:bg-slate-850 text-rose-455 text-[10px] py-1.5 px-2.5 rounded-lg font-bold border border-rose-500/15 hover:border-rose-500/30 transition"
+                >
+                  🔴 Phút thứ 20 (Khóa đoán vĩnh viễn!)
+                </button>
+                <button
+                  onClick={() => handleSetTime('2026-06-25T18:00:00Z')}
+                  className="bg-slate-900 hover:bg-slate-850 text-slate-300 text-[10px] py-1.5 px-2.5 rounded-lg font-bold border border-slate-800 hover:border-slate-700 transition"
+                >
+                  🗓️ Cao điểm vòng bảng (25/06)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Demo Utilities */}
+          <div className="space-y-3 bg-slate-950 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between">
+            <div>
+              <span className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Thao Tác Cột Dữ Liệu Demo</span>
+              <p className="text-[11px] text-slate-400 leading-normal mb-4">
+                Dữ liệu rỗng khó theo dõi biểu đồ? Với một chạm duy nhất, hệ thống nạp tự động hàng chục người chơi kì cựu ảo, 150+ tổ hợp đoán kết quả tự nhiên dọc 104 trận đấu để bạn chiêm ngưỡng thuật toán tính toán độ thăng tiến hiệu quả tức thì.
+              </p>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={handleGenerateDemo}
+                disabled={isLoading}
+                className="w-full bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/45 text-xs font-bold py-3 px-4 rounded-xl transition flex items-center justify-center space-x-2 shadow-sm cursor-pointer active:scale-98"
+              >
+                <UserPlus className="w-4 h-4 shrink-0" />
+                <span>Nạp 10 người chơi ảo & 150+ dự đoán mẫu</span>
+              </button>
+
+              {!showResetConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowResetConfirm(true)}
+                  disabled={isLoading}
+                  className="w-full bg-rose-500/5 hover:bg-rose-500/10 text-rose-455 border border-rose-500/10 hover:border-rose-500/25 text-xs font-bold py-3 px-4 rounded-xl transition flex items-center justify-center space-x-2 cursor-pointer active:scale-98"
+                >
+                  <FileWarning className="w-4 h-4 shrink-0" />
+                  <span>Xóa toàn bộ CSDL (Reset sạch)</span>
+                </button>
+              ) : (
+                <div className="bg-rose-950/20 border border-rose-500/20 rounded-xl p-3.5 space-y-3.5 animate-fade-in text-center">
+                  <p className="text-[11px] text-rose-400 font-bold leading-relaxed">
+                    ⚠️ CHÚ Ý: Hành động này sẽ XÓA SẠCH toàn bộ người chơi, dự đoán và tỉ số về trạng thái sạch ban đầu!
+                  </p>
+                  <div className="flex gap-2 justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowResetConfirm(false)}
+                      disabled={isLoading}
+                      className="bg-slate-900 hover:bg-slate-800 text-slate-300 text-[11px] px-3.5 py-2 rounded-xl border border-slate-800 hover:border-slate-750 font-bold transition active:scale-95 cursor-pointer"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetDB}
+                      disabled={isLoading}
+                      className="bg-rose-600 hover:bg-rose-500 text-white text-[11px] px-3.5 py-2 rounded-xl font-bold transition active:scale-95 cursor-pointer flex items-center gap-1"
+                    >
+                      <Check className="w-3.5 h-3.5 shrink-0" />
+                      <span>Xác nhận xóa</span>
+                    </button>
+                  </div>
+
+                  <div className="text-[9.5px] text-slate-500 font-mono text-center leading-normal pt-1 bg-slate-950 select-none rounded p-1.5 border border-slate-900">
+                    * CHÚ Ý: Reset CSDL sẽ khôi phục tỉ lệ sạch tinh để bắt đầu giải đấu thật.
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Registered Players and Passcodes Card */}
+      <div id="admin-members-card" className="bg-slate-900 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4">
+        <div className="flex items-center space-x-3 pb-2 border-b border-slate-800/60 justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-indigo-500/10 rounded-2xl text-indigo-400">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-100 font-display">Danh Sách Thành Viên & Mật Mã Hệ Thống</h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">Quản lý tài khoản và xem mã bí mật 6 số của từng người (Admin Only)</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={fetchPlayersList}
+            disabled={loadingPlayers}
+            className="text-[10px] text-slate-400 hover:text-slate-200 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-850 transition flex items-center gap-1 cursor-pointer active:scale-95"
+          >
+            {loadingPlayers ? <Loader2 className="w-3 h-3 animate-spin text-indigo-400" /> : <RefreshCw className="w-3 h-3" />}
+            <span>Tải lại</span>
+          </button>
+        </div>
+
+        <p className="text-xs text-slate-350 leading-relaxed">
+          Sổ danh bạ chính thức tổng hợp các thành viên đã đăng ký tham gia đoán trận. Mật mật mã 6 số được hiển thị trực tiếp ở đây để Admin hỗ trợ người chơi quên hoặc mất mật danh đăng nhập.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {loadingPlayers && playersList.length === 0 ? (
+            <div className="col-span-full py-6 text-center text-slate-500 flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+              <span className="text-xs font-bold font-mono">Đang đồng bộ sổ danh bạ...</span>
+            </div>
+          ) : playersList.length === 0 ? (
+            <div className="col-span-full py-6 text-center text-slate-550 text-xs italic">
+              Chưa có thành viên nào đăng ký tài khoản.
+            </div>
+          ) : (
+            playersList.map((usr) => {
+              const isAdminUser = usr.name === 'Usr-Bop';
+              return (
+                <div key={usr.name} className={`bg-slate-950 p-4 rounded-2xl border transition hover:border-slate-800 ${isAdminUser ? 'border-amber-500/20 bg-amber-500/5' : 'border-slate-850'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      {usr.name}
+                      {isAdminUser && <span className="bg-amber-500/10 text-amber-400 text-[8px] font-black uppercase px-2 py-0.5 rounded border border-amber-500/20">Admin 👑</span>}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500">Điểm: {usr.score}</span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between bg-slate-900/60 p-2.5 rounded-xl border border-slate-850">
+                    <span className="text-[10px] text-slate-400 uppercase font-black font-sans tracking-tight">Mã đăng nhập:</span>
+                    <span className="text-xs font-black font-mono text-emerald-440 tracking-widest">{usr.code}</span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Match Scores Input Section (Bento Rounded 3xl) */}
+      <div className="bg-slate-900 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4">
+        
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-800/60">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-amber-500/10 rounded-2xl text-amber-400">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-100 font-display">Ghi Nhận Tỉ Số Ban Tổ Chức</h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">Đặt điểm thật cho 104 trận đấu World Cup 2026</p>
+            </div>
+          </div>
+
+          {/* Table Search */}
+          <div className="relative w-full md:w-72">
+            <Search className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-550" />
+            <input
+              type="text"
+              placeholder="Tìm kiếm quốc gia, vòng đấu..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-950 text-xs text-slate-200 pl-10 pr-4 py-2.5 border border-slate-800 rounded-xl focus:outline-none focus:border-emerald-500 transition font-medium"
+            />
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-350 leading-relaxed">
+          Tìm kiếm cặp đấu và click <strong>"Cập nhật tỉ số"</strong> để thiết lập kết quả chung cuộc. Hệ thống sẽ ngay tức khắc quét tìm toàn bộ người chơi tham gia bình chọn trận đó và phân định điểm số hoàn toàn tự động (+1 điểm cho dự đoán khớp kết quả, 0 điểm nếu dự đoán sai lệch hoặc lỡ nhịp giờ khóa).
+        </p>
+
+        {/* Bulk toggle bar */}
+        <div className="flex flex-col sm:flex-row gap-2.5 items-center justify-between bg-slate-950/40 p-4 rounded-2xl border border-slate-850">
+          <div className="text-[11px] text-slate-450 font-sans leading-normal">
+            💡 <strong>Cài đặt hiển thị nhanh:</strong> Bật cho phép hiển thị ra hoặc ẩn toàn bộ lạt trận theo dõi của người chơi.
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => handleBulkVisibility(true)}
+              className="bg-emerald-900/20 hover:bg-emerald-800/25 text-emerald-400 border border-emerald-500/10 px-3.5 py-2 rounded-xl text-[10px] font-black transition cursor-pointer active:scale-95 shrink-0"
+            >
+              👁️ HIỆN TOÀN BỘ TRẬN ĐẤU (104)
+            </button>
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => handleBulkVisibility(false)}
+              className="bg-slate-900 hover:bg-slate-850 text-slate-400 border border-slate-800 px-3.5 py-2 rounded-xl text-[10px] font-black transition cursor-pointer active:scale-95 shrink-0"
+            >
+              👁️‍CẮT ẨN TOÀN BỘ TRẬN ĐẤU
+            </button>
+          </div>
+        </div>
+
+        {/* Dense Bento Table list */}
+        <div className="overflow-x-auto max-h-[460px] border border-slate-850 rounded-2xl bg-slate-950 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+          <table className="w-full text-left text-xs border-collapse relative">
+            <thead className="bg-slate-900/90 text-slate-400 uppercase text-[9.5px] font-bold tracking-widest sticky top-0 border-b border-slate-850 z-10 backdrop-blur-md">
+              <tr>
+                <th className="py-3.5 px-4">Mã số</th>
+                <th className="py-3.5 px-4">Vòng đấu</th>
+                <th className="py-3.5 px-4 text-center">Trận đấu kỳ tài</th>
+                <th className="py-3.5 px-4 text-center">Tỉ số thực tế</th>
+                <th className="py-3.5 px-4 text-center">Trạng thái hiện</th>
+                <th className="py-3.5 px-4 text-right pr-4">Lựa chọn cập nhật</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-850/60 text-slate-300">
+              {filteredMatches.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-500 font-bold uppercase tracking-widest">
+                    Chưa tìm thấy cặp trận đấu nào khớp bộ lọc tìm kiếm.
+                  </td>
+                </tr>
+              ) : (
+                filteredMatches.map((m) => {
+                  const isBeingUpdated = updatingMatchId === m.id;
+                  const isFinished = m.status === 'FINISHED';
+
+                  return (
+                    <tr key={m.id} className="hover:bg-slate-900/40 transition duration-150">
+                      
+                      {/* Match id info */}
+                      <td className="py-4 px-4 font-mono font-black text-slate-400">Trận {m.id}</td>
+                      
+                      {/* Match stage info */}
+                      <td className="py-4 px-4 font-bold text-[11px] text-slate-400">
+                        <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-850 whitespace-nowrap">
+                          {m.stage}
+                        </span>
+                      </td>
+                      
+                      {/* Versus info */}
+                      <td className="py-4 px-4 text-center">
+                        <div className="flex items-center justify-center space-x-2 font-bold text-slate-200">
+                          <span>{m.homeTeam}</span>
+                          <span className="text-[10px] text-slate-550 lowercase font-medium">vs</span>
+                          <span>{m.awayTeam}</span>
+                        </div>
+                        <div className="text-[9.5px] text-slate-500 font-mono mt-0.5">
+                          {new Date(m.matchTime).toLocaleString('vi-VN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </td>
+                      
+                      {/* Score dials */}
+                      <td className="py-4 px-4 text-center">
+                        {isBeingUpdated ? (
+                          <div className="flex items-center justify-center space-x-1">
+                            <input
+                              type="number"
+                              min="0"
+                              value={homeScoreInput}
+                              onChange={(e) => setHomeScoreInput(e.target.value)}
+                              className="w-12 bg-slate-900 text-center text-xs font-black border border-slate-700 rounded-lg py-1 text-emerald-400 focus:outline-none focus:border-emerald-500 font-mono"
+                            />
+                            <span className="text-slate-600 font-mono">-</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={awayScoreInput}
+                              onChange={(e) => setAwayScoreInput(e.target.value)}
+                              className="w-12 bg-slate-900 text-center text-xs font-black border border-slate-700 rounded-lg py-1 text-emerald-400 focus:outline-none focus:border-emerald-500 font-mono"
+                            />
+                          </div>
+                        ) : isFinished ? (
+                          <div className="inline-flex items-center space-x-2 bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-xl border border-emerald-500/15">
+                            <span className="font-mono font-black">{m.homeScore} - {m.awayScore}</span>
+                            <span className="text-[8px] uppercase font-black tracking-wider bg-emerald-500/20 px-1 rounded">FT</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 italic text-[11px] font-medium">Chưa cập nhật</span>
+                        )}
+                      </td>
+
+                      {/* Live Visibility Toggle Control */}
+                      <td className="py-4 px-4 text-center">
+                        <button
+                          type="button"
+                          disabled={isLoading}
+                          onClick={() => handleToggleVisibility(m.id, !m.visible)}
+                          className={`inline-flex items-center space-x-1 px-3 py-1.5 rounded-full text-[10px] font-bold border transition cursor-pointer active:scale-95 duration-200 select-none ${
+                            m.visible
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
+                              : 'bg-slate-950 text-slate-550 border-slate-850'
+                          }`}
+                        >
+                          {m.visible ? (
+                            <>
+                              <Eye className="w-3.5 h-3.5 text-emerald-450 shrink-0" />
+                              <span>MỞ HIỂN THỊ</span>
+                            </>
+                          ) : (
+                            <>
+                              <EyeOff className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                              <span>ĐANG ẨN</span>
+                            </>
+                          )}
+                        </button>
+                      </td>
+                      
+                      {/* Action buttons */}
+                      <td className="py-4 px-4 text-right">
+                        {isBeingUpdated ? (
+                          <div className="flex items-center justify-end space-x-1.5">
+                            <button
+                              onClick={() => handleUpdateScore(m.id)}
+                              className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg p-1.5 shadow-md hover:scale-105 transition active:scale-95 cursor-pointer"
+                              title="Xác nhận lưu điểm số"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setUpdatingMatchId(null)}
+                              className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-lg px-2.5 py-1 text-[11px] transition font-bold"
+                            >
+                              Hủy
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => startScoring(m)}
+                            className="bg-slate-900 hover:bg-slate-800 hover:text-slate-100 border border-slate-800 hover:border-slate-700/80 text-slate-400 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all duration-200 active:scale-95"
+                          >
+                            Cập nhật tỉ số
+                          </button>
+                        )}
+                      </td>
+
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+    </div>
+  );
+}

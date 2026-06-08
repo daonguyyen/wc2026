@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "player": {
+      "title": "Player",
+      "description": "A participant in the World Cup 2026 predictions",
+      "type": "object",
+      "properties": {
+        "phoneNumber": { "type": "string" },
+        "name": { "type": "string" },
+        "score": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["phoneNumber", "name", "score"]
+    },
+    "prediction": {
+      "title": "Prediction",
+      "description": "A match outcome prediction made by a player",
+      "type": "object",
+      "properties": {
+        "playerPhone": { "type": "string" },
+        "matchId": { "type": "string" },
+        "prediction": { "type": "string" },
+        "votedAt": { "type": "string", "format": "date-time" },
+        "points": { "type": "number" }
+      },
+      "required": ["playerPhone", "matchId", "prediction", "votedAt", "points"]
+    },
+    "match": {
+      "title": "Match",
+      "description": "A World Cup 2026 match",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "homeTeam": { "type": "string" },
+        "awayTeam": { "type": "string" },
+        "matchTime": { "type": "string" },
+        "status": { "type": "string" },
+        "homeScore": { "type": "number" },
+        "awayScore": { "type": "number" },
+        "winner": { "type": "string" },
+        "stage": { "type": "string" }
+      },
+      "required": ["id", "homeTeam", "awayTeam", "matchTime", "status"]
+    }
+  },
+  "firestore": {
+    "players/{phoneNumber}": {
+      "schema": "player",
+      "description": "Collection of players indexed by their phone number"
+    },
+    "predictions/{predictionId}": {
+      "schema": "prediction",
+      "description": "Collection of predictions made by players"
+    },
+    "matches/{matchId}": {
+      "schema": "match",
+      "description": "Collection of match schedules and live statuses"
+    }
+  }
+}

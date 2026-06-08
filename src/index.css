@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 2rem;
+}
+
+body {
+  background-color: #020617; /* slate-950 */
+}

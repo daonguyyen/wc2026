@@ -1,0 +1,8 @@
+{
+  "name": "Dự đoán World Cup 2026",
+  "description": "Ứng dụng trực tuyến dự đoán 104 trận đấu World Cup 2026 với cơ chế khóa sau 15 phút đầu, bảng xếp hạng và biểu đồ thống kê trực quan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
