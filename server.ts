@@ -28,6 +28,26 @@ interface Database {
   predictions: Record<string, Prediction>;
   matches: Match[];
   simulatedTime: string | null; // Simulated server ISO time
+  outrightPredictions?: Record<string, {
+    playerPhone: string;
+    champion: string;
+    goldenBoot: string;
+    goldenGlove: string;
+    goldenBall: string;
+    updatedAt: string;
+  }>;
+  outrightResults?: {
+    champion: string;
+    goldenBoot: string;
+    goldenGlove: string;
+    goldenBall: string;
+  };
+  outrightEvaluations?: Record<string, {
+    championCorrect?: boolean;
+    goldenBootCorrect?: boolean;
+    goldenGloveCorrect?: boolean;
+    goldenBallCorrect?: boolean;
+  }>;
 }
 
 let db: Database = {
@@ -35,6 +55,9 @@ let db: Database = {
   predictions: {},
   matches: [],
   simulatedTime: null,
+  outrightPredictions: {},
+  outrightResults: { champion: '', goldenBoot: '', goldenGlove: '', goldenBall: '' },
+  outrightEvaluations: {},
 };
 
 // Helper check for admin privileges based on Usr-Bop's pass code
@@ -43,6 +66,105 @@ function isAdmin(req: express.Request): boolean {
   if (!code) return false;
   const player = db.players[String(code).trim()];
   return player && player.name === 'Usr-Bop';
+}
+
+const TEAM_RATINGS: Record<string, number> = {
+  "Brazil": 10,
+  "Pháp": 10,
+  "Anh": 10,
+  "Argentina": 10,
+  "Bồ Đào Nha": 10,
+  "Tây Ban Nha": 10,
+  "Đức": 10,
+  "Bỉ": 10,
+  "Hà Lan": 10,
+  "Croatia": 8,
+  "Thụy Sĩ": 8,
+  "Ma-rốc": 8,
+  "Uruguay": 8,
+  "Hàn Quốc": 8,
+  "Nhật Bản": 8,
+  "Mỹ": 8,
+  "Na Uy": 8,
+  "Colombia": 8,
+  "Ecuador": 8,
+  "Thổ Nhĩ Kỳ": 8,
+  "Mexico": 6,
+  "Úc": 6,
+  "Scotland": 6,
+  "CH Séc": 6,
+  "Áo": 6,
+  "Ghana": 6,
+  "Senegal": 6,
+  "Thụy Điển": 6,
+  "Bờ Biển Ngà": 6,
+  "Tunisia": 6,
+  "Iran": 6,
+  "Algeria": 6,
+  "Uzbekistan": 6,
+  "Qatar": 4,
+  "Nam Phi": 4,
+  "Bosnia & Herzegovina": 4,
+  "Paraguay": 4,
+  "Haiti": 2,
+  "New Zealand": 4,
+  "Cape Verde": 4,
+  "Ả Rập Xê-út": 4,
+  "Iraq": 4,
+  "Jordan": 4,
+  "Curaçao": 4,
+  "CHDC Congo": 4,
+  "Panama": 4
+};
+
+function getMatchHandicap(homeTeam: string, awayTeam: string): { favored: 'HOME' | 'AWAY' | 'NONE'; value: number } {
+  if (homeTeam === 'Chưa xác định' || awayTeam === 'Chưa xác định') {
+    return { favored: 'NONE', value: 0 };
+  }
+  const homeRating = TEAM_RATINGS[homeTeam] !== undefined ? TEAM_RATINGS[homeTeam] : 6;
+  const awayRating = TEAM_RATINGS[awayTeam] !== undefined ? TEAM_RATINGS[awayTeam] : 6;
+  
+  const diff = homeRating - awayRating;
+  if (diff === 0) {
+    return { favored: 'NONE', value: 0 };
+  }
+  
+  const favored = diff > 0 ? 'HOME' : 'AWAY';
+  const absDiff = Math.abs(diff);
+  
+  let value = 0;
+  if (absDiff === 1 || absDiff === 2) {
+    value = 0.5;
+  } else if (absDiff === 3 || absDiff === 4) {
+    value = 1.0;
+  } else if (absDiff === 5 || absDiff === 6) {
+    value = 1.5;
+  } else if (absDiff >= 7) {
+    value = 2.0;
+  }
+  
+  return { favored, value };
+}
+
+function getHandicapWinner(homeScore: number, awayScore: number, homeTeam: string, awayTeam: string): 'HOME' | 'DRAW' | 'AWAY' {
+  const { favored, value } = getMatchHandicap(homeTeam, awayTeam);
+  if (favored === 'NONE' || value === 0) {
+    if (homeScore > awayScore) return 'HOME';
+    if (homeScore < awayScore) return 'AWAY';
+    return 'DRAW';
+  }
+  
+  if (favored === 'HOME') {
+    const adjustedHomeScore = homeScore - value;
+    if (adjustedHomeScore > awayScore) return 'HOME';
+    if (adjustedHomeScore < awayScore) return 'AWAY';
+    return 'DRAW';
+  } else {
+    const adjustedAwayScore = awayScore - value;
+    if (homeScore > adjustedAwayScore) return 'HOME';
+    if (homeScore < adjustedAwayScore) return 'AWAY';
+    return 'DRAW';
+  }
 }
 
 // Seed default users with patternless random-looking passcodes
@@ -112,17 +234,24 @@ function loadDB() {
           });
         }
       }
+      if (!db.outrightPredictions) db.outrightPredictions = {};
+      if (!db.outrightResults) db.outrightResults = { champion: '', goldenBoot: '', goldenGlove: '', goldenBall: '' };
+      if (!db.outrightEvaluations) db.outrightEvaluations = {};
+      
       seedDefaultPlayers();
-      saveDB();
+      recalculateAllScores();
     } else {
       db = {
         players: {},
         predictions: {},
         matches: generate104Matches().map(m => ({ ...m, visible: Number(m.id) <= 8 })),
         simulatedTime: null,
+        outrightPredictions: {},
+        outrightResults: { champion: '', goldenBoot: '', goldenGlove: '', goldenBall: '' },
+        outrightEvaluations: {},
       };
       seedDefaultPlayers();
-      saveDB();
+      recalculateAllScores();
     }
   } catch (error) {
     console.error('Lỗi khi tải cơ sở dữ liệu, khởi tạo lại:', error);
@@ -131,9 +260,12 @@ function loadDB() {
       predictions: {},
       matches: generate104Matches().map(m => ({ ...m, visible: Number(m.id) <= 8 })),
       simulatedTime: null,
+      outrightPredictions: {},
+      outrightResults: { champion: '', goldenBoot: '', goldenGlove: '', goldenBall: '' },
+      outrightEvaluations: {},
     };
     seedDefaultPlayers();
-    saveDB();
+    recalculateAllScores();
   }
 }
 
@@ -143,6 +275,71 @@ function saveDB() {
   } catch (error) {
     console.error('Lỗi khi lưu cơ sở dữ liệu:', error);
   }
+}
+
+function recalculateAllScores() {
+  if (!db.outrightPredictions) db.outrightPredictions = {};
+  if (!db.outrightResults) db.outrightResults = { champion: '', goldenBoot: '', goldenGlove: '', goldenBall: '' };
+  if (!db.outrightEvaluations) db.outrightEvaluations = {};
+
+  // For each prediction that was finished, update points: correct => 0, incorrect => 1
+  for (const pred of Object.values(db.predictions)) {
+    const match = db.matches.find(m => m.id === pred.matchId);
+    if (match && match.status === 'FINISHED') {
+      const isCorrect = pred.prediction === match.winner;
+      pred.points = isCorrect ? 0 : 1; // 0 points for correct, 1 point for incorrect
+      pred.evaluated = true;
+    }
+  }
+
+  // Calculate scores for players based on incorrect predictions + outright deductions
+  for (const phone of Object.keys(db.players)) {
+    const playerPreds = Object.values(db.predictions).filter((p) => p.playerPhone === phone && p.evaluated);
+    
+    // Core score = sum of incorrects
+    let incorrectCount = 0;
+    for (const p of playerPreds) {
+      if (p.points > 0) { // points is 1 for incorrect, 0 for correct
+        incorrectCount++;
+      }
+    }
+
+    let deductions = 0;
+    const outright = db.outrightPredictions[phone];
+    const evalResult = db.outrightEvaluations[phone];
+    const results = db.outrightResults;
+
+    if (outright && results) {
+      // 1. Champion (-10 points)
+      const isChampCorrect = evalResult?.championCorrect ?? (
+        !!results.champion && !!outright.champion && outright.champion.toLowerCase().trim() === results.champion.toLowerCase().trim()
+      );
+      if (isChampCorrect) deductions += 10;
+
+      // 2. Golden Boot (-5 points)
+      const isGoldenBootCorrect = evalResult?.goldenBootCorrect ?? (
+        !!results.goldenBoot && !!outright.goldenBoot && outright.goldenBoot.toLowerCase().trim() === results.goldenBoot.toLowerCase().trim()
+      );
+      if (isGoldenBootCorrect) deductions += 5;
+
+      // 3. Golden Glove (-5 points)
+      const isGoldenGloveCorrect = evalResult?.goldenGloveCorrect ?? (
+        !!results.goldenGlove && !!outright.goldenGlove && outright.goldenGlove.toLowerCase().trim() === results.goldenGlove.toLowerCase().trim()
+      );
+      if (isGoldenGloveCorrect) deductions += 5;
+
+      // 4. Golden Ball (-5 points)
+      const isGoldenBallCorrect = evalResult?.goldenBallCorrect ?? (
+        !!results.goldenBall && !!outright.goldenBall && outright.goldenBall.toLowerCase().trim() === results.goldenBall.toLowerCase().trim()
+      );
+      if (isGoldenBallCorrect) deductions += 5;
+    }
+
+    // New total score: lower is better!
+    db.players[phone].score = incorrectCount - deductions;
+  }
+
+  saveDB();
 }
 
 loadDB();
@@ -208,11 +405,19 @@ app.post('/api/matches/update-score', (req, res) => {
   if (!isAdmin(req)) {
     return res.status(403).json({ error: 'Quyền admin bị từ chối! Hoạt động ghi điểm chỉ dành cho tài khoản Admin.' });
   }
-  const { matchId, homeScore, awayScore, status } = req.body;
+  const { matchId, homeScore, awayScore, status, homeTeam, awayTeam } = req.body;
   
   const match = db.matches.find((m) => m.id === String(matchId));
   if (!match) {
     return res.status(404).json({ error: 'Không tìm thấy trận đấu' });
+  }
+
+  // Allow updating team names manually
+  if (homeTeam && typeof homeTeam === 'string') {
+    match.homeTeam = homeTeam.trim();
+  }
+  if (awayTeam && typeof awayTeam === 'string') {
+    match.awayTeam = awayTeam.trim();
   }
 
   const hScore = Number(homeScore);
@@ -226,35 +431,11 @@ app.post('/api/matches/update-score', (req, res) => {
   match.awayScore = aScore;
   match.status = status || 'FINISHED';
 
-  // Calculate winner
-  let winner: 'HOME' | 'DRAW' | 'AWAY' = 'DRAW';
-  if (hScore > aScore) winner = 'HOME';
-  else if (hScore < aScore) winner = 'AWAY';
-  match.winner = winner;
+  // Calculate winner based on handicap rules
+  const handicapWinner = getHandicapWinner(hScore, aScore, match.homeTeam, match.awayTeam);
+  match.winner = handicapWinner;
 
-  // Recalculate predictions points for this match
-  // 1 point for correct, 0 for incorrect
-  const predictionsList = Object.values(db.predictions).filter((p) => p.matchId === String(matchId));
-  for (const pred of predictionsList) {
-    const isCorrect = pred.prediction === winner;
-    pred.points = isCorrect ? 1 : 0;
-    pred.evaluated = true;
-    db.predictions[`${pred.playerPhone}_${pred.matchId}`] = pred;
-  }
-
-  // Recalculate all player total scores
-  for (const phone of Object.keys(db.players)) {
-    let playerTotalPoints = 0;
-    const playerPreds = Object.values(db.predictions).filter((p) => p.playerPhone === phone);
-    for (const p of playerPreds) {
-      if (p.evaluated && p.points > 0) {
-        playerTotalPoints += p.points;
-      }
-    }
-    db.players[phone].score = playerTotalPoints;
-  }
-
-  saveDB();
+  recalculateAllScores();
   res.json({ message: 'Cập nhật tỉ số và tính điểm người chơi thành công!', match });
 });
 
@@ -300,20 +481,8 @@ app.post('/api/matches/sync', async (req, res) => {
           match.awayScore = awayScore;
           
           if (status === 'FINISHED' && homeScore !== undefined && awayScore !== undefined) {
-            let winner: 'HOME' | 'DRAW' | 'AWAY' = 'DRAW';
-            if (homeScore > awayScore) winner = 'HOME';
-            else if (homeScore < awayScore) winner = 'AWAY';
-            match.winner = winner;
-
-            // Recalculate predictions points for this match
-            const predictionsList = Object.values(db.predictions).filter((p) => p.matchId === String(match.id));
-            for (const pred of predictionsList) {
-              const soccerWinner = match.winner!;
-              const isCorrect = pred.prediction === soccerWinner;
-              pred.points = isCorrect ? 1 : 0;
-              pred.evaluated = true;
-              db.predictions[`${pred.playerPhone}_${pred.matchId}`] = pred;
-            }
+            const handicapWinner = getHandicapWinner(homeScore, awayScore, match.homeTeam, match.awayTeam);
+            match.winner = handicapWinner;
             finishedNewCount++;
           }
           
@@ -327,19 +496,7 @@ app.post('/api/matches/sync', async (req, res) => {
     }
 
     if (updatedCount > 0) {
-      // Recalculate player scores if there are new scores or results evaluations
-      for (const phone of Object.keys(db.players)) {
-        let playerTotalPoints = 0;
-        const playerPreds = Object.values(db.predictions).filter((p) => p.playerPhone === phone);
-        for (const p of playerPreds) {
-          if (p.evaluated && p.points > 0) {
-            playerTotalPoints += p.points;
-          }
-        }
-        db.players[phone].score = playerTotalPoints;
-      }
-      
-      saveDB();
+      recalculateAllScores();
     }
 
     res.json({
@@ -488,6 +645,89 @@ app.get('/api/predictions/:phone', (req, res) => {
   res.json({ predictions: list });
 });
 
+// 7a. Get user's outright predictions
+app.get('/api/outright-predictions/:phone', (req, res) => {
+  const phone = req.params.phone.trim();
+  const prediction = db.outrightPredictions?.[phone] || null;
+  res.json({ outright: prediction });
+});
+
+// 7b. Submit/Update user's outright predictions
+app.post('/api/outright-predictions', (req, res) => {
+  const { playerPhone, champion, goldenBoot, goldenGlove, goldenBall } = req.body;
+  if (!playerPhone) {
+    return res.status(400).json({ error: 'Thiếu mã người chơi' });
+  }
+
+  const phone = String(playerPhone).trim();
+  const player = db.players[phone];
+  if (!player) {
+    return res.status(404).json({ error: 'Không tìm thấy người chơi' });
+  }
+
+  const now = getCurrentTime();
+  // Khóa vào 00h ngày 19/06/2026 (UTC+7, which is 2026-06-18T17:00:00.000Z)
+  const OUTRIGHT_LOCK_TIME = new Date('2026-06-18T17:00:00.000Z');
+
+  if (now > OUTRIGHT_LOCK_TIME) {
+    return res.status(400).json({ error: 'Đã quá thời hạn dự đoán chung cuộc (00h ngày 19/06/2026)!' });
+  }
+
+  if (!db.outrightPredictions) db.outrightPredictions = {};
+  db.outrightPredictions[phone] = {
+    playerPhone: phone,
+    champion: String(champion || '').trim(),
+    goldenBoot: String(goldenBoot || '').trim(),
+    goldenGlove: String(goldenGlove || '').trim(),
+    goldenBall: String(goldenBall || '').trim(),
+    updatedAt: now.toISOString()
+  };
+
+  recalculateAllScores();
+  res.json({ message: 'Lưu dự đoán dài hạn World Cup thành công!', outright: db.outrightPredictions[phone] });
+});
+
+// 7c. Get admin configurations for outright predictions
+app.get('/api/admin/outright-config', (req, res) => {
+  if (!isAdmin(req)) {
+    return res.status(403).json({ error: 'Quyền admin bị từ chối!' });
+  }
+  res.json({
+    results: db.outrightResults || { champion: '', goldenBoot: '', goldenGlove: '', goldenBall: '' },
+    evaluations: db.outrightEvaluations || {},
+    predictions: db.outrightPredictions || {},
+    lockTime: '2026-06-18T17:00:00.000Z'
+  });
+});
+
+// 7d. Save admin configurations for outright predictions & recalculate
+app.post('/api/admin/outright-config', (req, res) => {
+  if (!isAdmin(req)) {
+    return res.status(403).json({ error: 'Quyền admin bị từ chối!' });
+  }
+  const { results, evaluations } = req.body;
+
+  if (results) {
+    db.outrightResults = {
+      champion: String(results.champion || '').trim(),
+      goldenBoot: String(results.goldenBoot || '').trim(),
+      goldenGlove: String(results.goldenGlove || '').trim(),
+      goldenBall: String(results.goldenBall || '').trim()
+    };
+  }
+
+  if (evaluations) {
+    db.outrightEvaluations = evaluations;
+  }
+
+  recalculateAllScores();
+  res.json({
+    message: 'Cập nhật và tính điểm chung cuộc thành công!',
+    results: db.outrightResults,
+    evaluations: db.outrightEvaluations
+  });
+});
+
 // 8. Leaderboard + Stats
 app.get('/api/leaderboard', (req, res) => {
   const playersList = Object.values(db.players);
@@ -496,7 +736,10 @@ app.get('/api/leaderboard', (req, res) => {
   const leaderboard = playersList.map((player) => {
     const playerPreds = predsList.filter((p) => p.playerPhone === player.phoneNumber);
     const predictedCount = playerPreds.length;
-    const correctCount = playerPreds.filter((p) => p.evaluated && p.points > 0).length;
+    const correctCount = playerPreds.filter((p) => p.evaluated && p.points === 0).length;
+
+    // Retrieve outright info for frontend use if desired
+    const outright = db.outrightPredictions?.[player.phoneNumber] || null;
 
     return {
       name: player.name,
@@ -505,13 +748,17 @@ app.get('/api/leaderboard', (req, res) => {
       createdAt: player.createdAt,
       predictedCount,
       correctCount,
+      outright,
     };
   });
 
-  // Sort by score desc, then name
+  // Sort by score ASCENDING (lower is better), then correctCount desc
   leaderboard.sort((a, b) => {
-    if (b.score !== a.score) {
-      return b.score - a.score;
+    if (a.score !== b.score) {
+      return a.score - b.score;
+    }
+    if (b.correctCount !== a.correctCount) {
+      return b.correctCount - a.correctCount;
     }
     return a.name.localeCompare(b.name);
   });
@@ -543,29 +790,58 @@ app.get('/api/odds', async (req, res) => {
     : db.matches;
 
   const oddsList = matchesToProcess.map((m) => {
-    // Generate realistic odds based on relative team string lengths or fixed mock
-    const homeLen = m.homeTeam.length;
-    const awayLen = m.awayTeam.length;
-    let homeOdds = 1.8;
-    let drawOdds = 3.2;
-    let awayOdds = 4.2;
+    const homeRating = TEAM_RATINGS[m.homeTeam] !== undefined ? TEAM_RATINGS[m.homeTeam] : 6;
+    const awayRating = TEAM_RATINGS[m.awayTeam] !== undefined ? TEAM_RATINGS[m.awayTeam] : 6;
+    const diff = homeRating - awayRating;
+    const idHash = (Number(m.id) || 1) % 10;
+    const randomOffset = parseFloat((idHash * 0.02).toFixed(2));
 
-    if (homeLen > awayLen) {
-      homeOdds = parseFloat((1.5 + (homeLen % 3) * 0.4).toFixed(2));
-      awayOdds = parseFloat((2.5 + (awayLen % 5) * 0.8).toFixed(2));
-    } else if (homeLen < awayLen) {
-      homeOdds = parseFloat((2.5 + (homeLen % 5) * 0.8).toFixed(2));
-      awayOdds = parseFloat((1.5 + (awayLen % 3) * 0.4).toFixed(2));
+    let homeOdds = 2.50;
+    let drawOdds = 3.20;
+    let awayOdds = 2.50;
+
+    if (diff === 0) {
+      homeOdds = parseFloat((2.30 + randomOffset).toFixed(2));
+      awayOdds = parseFloat((2.30 + (0.18 - randomOffset)).toFixed(2));
+      drawOdds = parseFloat((3.10 + randomOffset * 0.5).toFixed(2));
+    } else if (diff > 0) {
+      if (diff <= 2) {
+        homeOdds = parseFloat((1.70 + randomOffset).toFixed(2));
+        awayOdds = parseFloat((3.40 + randomOffset * 2).toFixed(2));
+        drawOdds = parseFloat((3.20 + randomOffset).toFixed(2));
+      } else if (diff <= 4) {
+        homeOdds = parseFloat((1.35 + randomOffset * 0.5).toFixed(2));
+        awayOdds = parseFloat((5.00 + randomOffset * 3).toFixed(2));
+        drawOdds = parseFloat((3.80 + randomOffset).toFixed(2));
+      } else if (diff <= 6) {
+        homeOdds = parseFloat((1.18 + randomOffset * 0.3).toFixed(2));
+        awayOdds = parseFloat((8.00 + randomOffset * 5).toFixed(2));
+        drawOdds = parseFloat((4.80 + randomOffset * 2).toFixed(2));
+      } else {
+        homeOdds = parseFloat((1.05 + randomOffset * 0.1).toFixed(2));
+        awayOdds = parseFloat((15.00 + randomOffset * 10).toFixed(2));
+        drawOdds = parseFloat((6.50 + randomOffset * 4).toFixed(2));
+      }
     } else {
-      homeOdds = 2.4;
-      awayOdds = 2.4;
+      const absDiff = Math.abs(diff);
+      if (absDiff <= 2) {
+        awayOdds = parseFloat((1.70 + randomOffset).toFixed(2));
+        homeOdds = parseFloat((3.40 + randomOffset * 2).toFixed(2));
+        drawOdds = parseFloat((3.20 + randomOffset).toFixed(2));
+      } else if (absDiff <= 4) {
+        awayOdds = parseFloat((1.35 + randomOffset * 0.5).toFixed(2));
+        homeOdds = parseFloat((5.00 + randomOffset * 3).toFixed(2));
+        drawOdds = parseFloat((3.80 + randomOffset).toFixed(2));
+      } else if (absDiff <= 6) {
+        awayOdds = parseFloat((1.18 + randomOffset * 0.3).toFixed(2));
+        homeOdds = parseFloat((8.00 + randomOffset * 5).toFixed(2));
+        drawOdds = parseFloat((4.80 + randomOffset * 2).toFixed(2));
+      } else {
+        awayOdds = parseFloat((1.05 + randomOffset * 0.1).toFixed(2));
+        homeOdds = parseFloat((15.00 + randomOffset * 10).toFixed(2));
+        drawOdds = parseFloat((6.50 + randomOffset * 4).toFixed(2));
+      }
     }
-
-    // Add slight fluctuation based on minutes or system clock to make it dynamic
-    const minuteFactor = (getCurrentTime().getMinutes() % 10) / 100;
-    homeOdds = parseFloat((homeOdds + minuteFactor * (homeLen % 2 === 0 ? 1 : -1)).toFixed(2));
-    awayOdds = parseFloat((awayOdds + minuteFactor * (awayLen % 2 === 0 ? -1 : 1)).toFixed(2));
-    drawOdds = parseFloat((3.0 + (homeLen % 4) * 0.2 + minuteFactor).toFixed(2));
 
     return {
       matchId: m.id,
@@ -616,7 +892,7 @@ app.post('/api/admin/generate-demo', (req, res) => {
     m.status = 'FINISHED';
     m.homeScore = matchResults[i].home;
     m.awayScore = matchResults[i].away;
-    m.winner = m.homeScore > m.awayScore ? 'HOME' : m.homeScore < m.awayScore ? 'AWAY' : 'DRAW';
+    m.winner = getHandicapWinner(m.homeScore, m.awayScore, m.homeTeam, m.awayTeam);
     m.visible = true; // Make active matches visible
   }
 
@@ -636,7 +912,7 @@ app.post('/api/admin/generate-demo', (req, res) => {
       let evaluated = false;
       if (match.status === 'FINISHED') {
         evaluated = true;
-        points = randomPred === match.winner ? 1 : 0;
+        points = randomPred === match.winner ? 0 : 1; // 0 for correct, 1 for incorrect
       }
 
       db.predictions[predKey] = {
@@ -650,20 +926,40 @@ app.post('/api/admin/generate-demo', (req, res) => {
     }
   }
 
-  // Calculate scores for players
-  for (const phone of Object.keys(db.players)) {
-    const playerPreds = Object.values(db.predictions).filter((p) => p.playerPhone === phone);
-    let totalPoints = 0;
-    for (const p of playerPreds) {
-      if (p.evaluated) {
-        totalPoints += p.points;
-      }
-    }
-    db.players[phone].score = totalPoints;
-  }
+  // Setup Outright predictions & official results for representation
+  db.outrightResults = {
+    champion: 'Pháp',
+    goldenBoot: 'Mbappe',
+    goldenGlove: 'Maignan',
+    goldenBall: 'Griezmann'
+  };
 
-  saveDB();
-  res.json({ message: 'Đã tạo 10 tài khoản mẫu và các dự đoán thử nghiệm để biểu diễn biểu đồ!', players: db.players });
+  db.outrightPredictions = {};
+  db.outrightEvaluations = {};
+
+  const teamsDemo = ['Brazil', 'Pháp', 'Anh', 'Argentina', 'Bồ Đào Nha', 'Ý'];
+  const playersDemo = ['Mbappe', 'Haaland', 'Cristiano Ronaldo', 'Kane', 'Messi', 'Bellingham'];
+  const gkDemo = ['Maignan', 'Alisson', 'Courtois', 'Donnarumma', 'Pickford', 'Martinez'];
+
+  phones.forEach((phone, idx) => {
+    // Add varying outright predictions
+    const choiceChg = idx % 2 === 0 ? 'Pháp' : teamsDemo[idx % teamsDemo.length];
+    const choiceBoot = idx % 3 === 0 ? 'Mbappe' : playersDemo[idx % playersDemo.length];
+    const choiceGlove = idx % 4 === 0 ? 'Maignan' : gkDemo[idx % gkDemo.length];
+    const choiceBall = idx % 5 === 0 ? 'Griezmann' : playersDemo[idx % playersDemo.length];
+
+    db.outrightPredictions![phone] = {
+      playerPhone: phone,
+      champion: choiceChg,
+      goldenBoot: choiceBoot,
+      goldenGlove: choiceGlove,
+      goldenBall: choiceBall,
+      updatedAt: new Date('2026-06-12T12:00:00Z').toISOString()
+    };
+  });
+
+  recalculateAllScores();
+  res.json({ message: 'Đã tạo 10 tài khoản mẫu cùng các dự đoán trận đấu và dự kiến chung cuộc (Pháp, Mbappe, Maignan) thành công!', players: db.players });
 });
 
 // 11. Reset whole database to clean slate
@@ -741,7 +1037,7 @@ if (!isProd) {
 } else {
   const distPath = path.join(process.cwd(), 'dist');
   app.use(express.static(distPath));
-  app.get('*all', (req, res) => {
+  app.get('*', (req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 

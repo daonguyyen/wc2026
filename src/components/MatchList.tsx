@@ -62,6 +62,94 @@ function getTeamFlag(teamName: string): string {
   return '⚽';
 }
 
+const TEAM_RATINGS: Record<string, number> = {
+  "Brazil": 10,
+  "Pháp": 10,
+  "Anh": 10,
+  "Argentina": 10,
+  "Bồ Đào Nha": 10,
+  "Tây Ban Nha": 10,
+  "Đức": 10,
+  "Bỉ": 10,
+  "Hà Lan": 10,
+  "Croatia": 8,
+  "Thụy Sĩ": 8,
+  "Ma-rốc": 8,
+  "Uruguay": 8,
+  "Hàn Quốc": 8,
+  "Nhật Bản": 8,
+  "Mỹ": 8,
+  "Na Uy": 8,
+  "Colombia": 8,
+  "Ecuador": 8,
+  "Thổ Nhĩ Kỳ": 8,
+  "Mexico": 6,
+  "Úc": 6,
+  "Scotland": 6,
+  "CH Séc": 6,
+  "Áo": 6,
+  "Ghana": 6,
+  "Senegal": 6,
+  "Thụy Điển": 6,
+  "Bờ Biển Ngà": 6,
+  "Tunisia": 6,
+  "Iran": 6,
+  "Algeria": 6,
+  "Uzbekistan": 6,
+  "Qatar": 4,
+  "Nam Phi": 4,
+  "Bosnia & Herzegovina": 4,
+  "Paraguay": 4,
+  "Haiti": 2,
+  "New Zealand": 4,
+  "Cape Verde": 4,
+  "Ả Rập Xê-út": 4,
+  "Iraq": 4,
+  "Jordan": 4,
+  "Curaçao": 4,
+  "CHDC Congo": 4,
+  "Panama": 4
+};
+
+function getMatchHandicap(homeTeam?: string, awayTeam?: string): { favored: 'HOME' | 'AWAY' | 'NONE'; value: number } {
+  if (!homeTeam || !awayTeam || homeTeam === 'Chưa xác định' || awayTeam === 'Chưa xác định') {
+    return { favored: 'NONE', value: 0 };
+  }
+  const homeRating = TEAM_RATINGS[homeTeam] !== undefined ? TEAM_RATINGS[homeTeam] : 6;
+  const awayRating = TEAM_RATINGS[awayTeam] !== undefined ? TEAM_RATINGS[awayTeam] : 6;
+  
+  const diff = homeRating - awayRating;
+  if (diff === 0) {
+    return { favored: 'NONE', value: 0 };
+  }
+  
+  const favored = diff > 0 ? 'HOME' : 'AWAY';
+  const absDiff = Math.abs(diff);
+  
+  let value = 0;
+  if (absDiff === 1 || absDiff === 2) {
+    value = 0.5;
+  } else if (absDiff === 3 || absDiff === 4) {
+    value = 1.0;
+  } else if (absDiff === 5 || absDiff === 6) {
+    value = 1.5;
+  } else if (absDiff >= 7) {
+    value = 2.0;
+  }
+  
+  return { favored, value };
+}
+
+function getHandicapText(homeTeam?: string, awayTeam?: string): string {
+  const { favored, value } = getMatchHandicap(homeTeam, awayTeam);
+  if (favored === 'NONE' || value === 0) {
+    return 'Đồng banh (0)';
+  }
+  const favTeam = favored === 'HOME' ? homeTeam || 'Đội nhà' : awayTeam || 'Đội khách';
+  const shortFavTeamName = favTeam.replace(/\(.*?\)/g, '').trim();
+  return `${shortFavTeamName} chấp ${value}`;
+}
+
 export default function MatchList({
   matches,
   predictions,
@@ -323,7 +411,7 @@ export default function MatchList({
                   </div>
 
                   {/* Middle Versus / Score */}
-                  <div className="text-center flex flex-col items-center justify-center space-y-2">
+                  <div className="text-center flex flex-col items-center justify-center space-y-1.5">
                     {m.status === 'FINISHED' ? (
                       <div className="bg-slate-950 rounded-xl px-3.5 py-1.5 border border-slate-800 text-center scale-105 shadow-inner">
                         <span className="text-lg font-mono font-black text-emerald-400">{m.homeScore}</span>
@@ -339,6 +427,11 @@ export default function MatchList({
                     <div className="text-[10px] font-mono text-slate-500 font-bold flex items-center space-x-1 bg-slate-950 px-2 py-0.5 rounded border border-slate-850/40">
                       <Calendar className="w-3 h-3 text-slate-500 shrink-0" />
                       <span>{mTime.toLocaleString('vi-VN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+
+                    <div className="text-[9px] text-amber-400 font-bold flex items-center space-x-1.5 bg-amber-500/10 px-2.5 py-1 rounded border border-amber-500/20 select-none shadow whitespace-nowrap">
+                      <span>⚽</span>
+                      <span>{getHandicapText(m.homeTeam, m.awayTeam)}</span>
                     </div>
                   </div>
 

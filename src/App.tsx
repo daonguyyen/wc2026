@@ -9,6 +9,7 @@ import { Player, Match, Prediction, MatchOdds, LeaderboardEntry } from './types'
 import MatchList from './components/MatchList';
 import StatsDashboard from './components/StatsDashboard';
 import AdminPanel from './components/AdminPanel';
+import OutrightPredictions from './components/OutrightPredictions';
 import {
   Trophy,
   Activity,
@@ -318,11 +319,11 @@ export default function App() {
     return () => clearInterval(timer);
   }, [serverTime, isSimulatingTime]);
 
-  // Sync every 8 seconds in the background
+  // Sync every 30 seconds in the background to ensure updates while avoiding excessive server API spam
   useEffect(() => {
     const bgSync = setInterval(() => {
       refreshData();
-    }, 8000);
+    }, 30000);
 
     return () => clearInterval(bgSync);
   }, [player]);
@@ -567,12 +568,13 @@ export default function App() {
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
               <span className="block text-xs font-bold text-slate-350 uppercase tracking-wider flex items-center font-display">
                 <Info className="w-4 h-4 text-emerald-450 mr-2 shrink-0" />
-                <span>Quy định Dự Đoán</span>
+                <span>Quy định Tính Điểm 🏆</span>
               </span>
               <ul className="text-[11px] text-slate-400 space-y-2.5 list-disc pl-4 leading-relaxed">
-                <li>Đăng nhập để hệ thống ghi dữ liệu và tích bốc chính chủ.</li>
-                <li>Dự đoán sau khi trận bắt đầu 15 phút sẽ tự động chuyển trạng thái <span className="text-rose-400 font-semibold">Khóa 🔒</span>.</li>
-                <li>Biểu đồ sẽ tự tổng hợp vẽ lại khi BTC ghi nhận tỉ số đối kháng chính thức.</li>
+                <li>Đăng nhập để lưu dự đoán trận đấu & dự đoán chung cuộc (outrights).</li>
+                <li><strong>Cách tính điểm:</strong> Mỗi dự đoán <span className="text-rose-400 font-semibold">Sai nhận +1 điểm</span>, đoán đúng nhận <span className="text-emerald-400 font-semibold">0 điểm</span>. <strong>Ai ít điểm nhất sẽ thắng cuộc!</strong></li>
+                <li><strong>Khấu trừ dài hạn:</strong> Đoán đúng Champion được <span className="text-emerald-400 font-bold">trừ -10đ</span>, đúng Vua phá lưới / Găng tay Vàng / Quả bóng Vàng được <span className="text-emerald-400 font-bold">trừ -5đ</span> vào điểm tổng.</li>
+                <li>Mở khóa dự đoán dài hạn trước <strong>00h00 ngày 19/06/2026</strong>. Sau giờ này sẽ khóa 🔒.</li>
               </ul>
             </div>
 
@@ -637,23 +639,121 @@ export default function App() {
             {/* TAB CONTENT RENDERING */}
             <div className="min-h-[450px]">
               {activeTab === 'MATCHES' && (
-                <MatchList
-                  matches={matches}
-                  predictions={predictions}
-                  odds={odds}
-                  playerPhone={player?.phoneNumber ?? null}
-                  currentTime={serverTime}
-                  onVote={handleVote}
-                  onOpenLogin={() => {
-                    const codeInputEl = document.querySelector('input[maxLength="6"]') as HTMLInputElement;
-                    if (codeInputEl) codeInputEl.focus();
-                  }}
-                  isAdminUser={!!player && player.name === 'Usr-Bop'}
-                />
+                <div className="space-y-6">
+                  {player && (
+                    <OutrightPredictions
+                      playerPhone={player.phoneNumber}
+                      matches={matches}
+                      serverTime={serverTime}
+                      onNotify={notify}
+                      onRefresh={refreshData}
+                      leaderboardEntry={leaderboard.find(l => l.name === player.name)}
+                    />
+                  )}
+                  <MatchList
+                    matches={matches}
+                    predictions={predictions}
+                    odds={odds}
+                    playerPhone={player?.phoneNumber ?? null}
+                    currentTime={serverTime}
+                    onVote={handleVote}
+                    onOpenLogin={() => {
+                      const codeInputEl = document.querySelector('input[maxLength="6"]') as HTMLInputElement;
+                      if (codeInputEl) codeInputEl.focus();
+                    }}
+                    isAdminUser={!!player && player.name === 'Usr-Bop'}
+                  />
+                </div>
               )}
 
               {activeTab === 'LEADERBOARD' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  {/* Top 3 Honor Board Podium */}
+                  {leaderboard.length >= 3 && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end pt-4 pb-2">
+                      
+                      {/* 2nd place (Silver) */}
+                      {leaderboard[1] && (
+                        <div className="md:order-1 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg flex flex-col items-center relative overflow-hidden group hover:border-slate-700 transition duration-300">
+                          <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-400" />
+                          <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border-2 border-slate-400 text-slate-350 font-black text-lg shadow-inner mb-3">
+                            🥈
+                          </div>
+                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest bg-slate-950 px-2.5 py-0.5 rounded-full border border-slate-800 mb-1">
+                            HẠNG NHÌ
+                          </span>
+                          <h3 className="text-sm font-bold text-slate-100 truncate max-w-full text-center font-display">
+                            {leaderboard[1].name}
+                          </h3>
+                          <div className="mt-3 grid grid-cols-2 gap-2 w-full text-center border-t border-slate-800 pt-3">
+                            <div>
+                              <span className="block text-[8px] text-slate-500 uppercase font-black">Chính xác</span>
+                              <span className="block font-mono text-xs text-slate-300 font-bold">{leaderboard[1].correctCount} thắng</span>
+                            </div>
+                            <div>
+                              <span className="block text-[8px] text-slate-500 uppercase font-black">Điểm số</span>
+                              <span className="block font-mono text-xs text-emerald-400 font-bold">{leaderboard[1].score} đ</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 1st place (Gold) */}
+                      {leaderboard[0] && (
+                        <div className="md:order-2 bg-gradient-to-b from-yellow-950/20 via-slate-900 to-slate-900 border-2 border-yellow-500/30 rounded-3xl p-6 shadow-xl flex flex-col items-center relative overflow-hidden group hover:border-yellow-500/50 transition duration-300 md:-translate-y-2 scale-102">
+                          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-400 to-amber-500" />
+                          <div className="absolute -top-12 w-24 h-24 bg-yellow-500/10 rounded-full blur-xl pointer-events-none" />
+                          <div className="w-14 h-14 bg-yellow-950/40 rounded-full flex items-center justify-center border-2 border-yellow-500 text-yellow-500 font-black text-xl shadow-lg shadow-yellow-500/5 mb-3">
+                            👑
+                          </div>
+                          <span className="text-[11px] font-black uppercase text-yellow-500 tracking-wider bg-yellow-950 px-3 py-1 rounded-full border border-yellow-500/20 mb-1.5 flex items-center gap-1">
+                            🥇 VÔ ĐỊCH
+                          </span>
+                          <h3 className="text-base font-black text-white truncate max-w-full text-center font-display tracking-tight uppercase">
+                            {leaderboard[0].name}
+                          </h3>
+                          <div className="mt-4 grid grid-cols-2 gap-2 w-full text-center border-t border-slate-800 pt-3.5">
+                            <div>
+                              <span className="block text-[9px] text-slate-400 uppercase font-black">Chính xác</span>
+                              <span className="block font-mono text-emerald-400 text-sm font-bold">{leaderboard[0].correctCount} thắng</span>
+                            </div>
+                            <div>
+                              <span className="block text-[9px] text-slate-400 uppercase font-black">Điểm số</span>
+                              <span className="block font-mono text-yellow-400 text-sm font-black">{leaderboard[0].score} đ</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 3rd place (Bronze) */}
+                      {leaderboard[2] && (
+                        <div className="md:order-3 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg flex flex-col items-center relative overflow-hidden group hover:border-slate-700 transition duration-300">
+                          <div className="absolute top-0 left-0 right-0 h-1.5 bg-amber-700" />
+                          <div className="w-12 h-12 bg-amber-950/20 rounded-full flex items-center justify-center border-2 border-amber-600 text-amber-600 font-black text-lg shadow-inner mb-3">
+                            🥉
+                          </div>
+                          <span className="text-[10px] font-black uppercase text-amber-600 tracking-widest bg-amber-955/10 px-2.5 py-0.5 rounded-full border border-amber-800 mb-1">
+                            HẠNG BA
+                          </span>
+                          <h3 className="text-sm font-bold text-slate-100 truncate max-w-full text-center font-display">
+                            {leaderboard[2].name}
+                          </h3>
+                          <div className="mt-3 grid grid-cols-2 gap-2 w-full text-center border-t border-slate-800 pt-3">
+                            <div>
+                              <span className="block text-[8px] text-slate-500 uppercase font-black">Chính xác</span>
+                              <span className="block font-mono text-xs text-slate-300 font-bold">{leaderboard[2].correctCount} thắng</span>
+                            </div>
+                            <div>
+                              <span className="block text-[8px] text-slate-500 uppercase font-black">Điểm số</span>
+                              <span className="block font-mono text-xs text-emerald-400 font-bold">{leaderboard[2].score} đ</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                    </div>
+                  )}
+
                   {/* Search Bar for Leaderboard */}
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div>

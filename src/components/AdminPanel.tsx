@@ -32,6 +32,8 @@ export default function AdminPanel({
   const [updatingMatchId, setUpdatingMatchId] = useState<string | null>(null);
   const [homeScoreInput, setHomeScoreInput] = useState('0');
   const [awayScoreInput, setAwayScoreInput] = useState('0');
+  const [homeTeamInput, setHomeTeamInput] = useState('');
+  const [awayTeamInput, setAwayTeamInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
@@ -39,17 +41,11 @@ export default function AdminPanel({
   const [playersList, setPlayersList] = useState<{ name: string; code: string; score: number; createdAt: string }[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(false);
 
-  // Filter matches for easy scoring
-  const filteredMatches = matches.filter((m) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      m.homeTeam.toLowerCase().includes(query) ||
-      m.awayTeam.toLowerCase().includes(query) ||
-      m.stage.toLowerCase().includes(query) ||
-      `trận ${m.id}`.includes(query)
-    );
-  });
+  // Outright configurations
+  const [outrightResults, setOutrightResults] = useState({ champion: '', goldenBoot: '', goldenGlove: '', goldenBall: '' });
+  const [outrightPredictions, setOutrightPredictions] = useState<Record<string, any>>({});
+  const [outrightEvaluations, setOutrightEvaluations] = useState<Record<string, any>>({});
+  const [loadingConfig, setLoadingConfig] = useState(false);
 
   // Fetch registered players with direct passcode access
   const fetchPlayersList = async () => {
@@ -70,8 +66,59 @@ export default function AdminPanel({
     }
   };
 
+  const fetchOutrightConfig = async () => {
+    if (!adminCode) return;
+    setLoadingConfig(true);
+    try {
+      const res = await fetch('/api/admin/outright-config', {
+        headers: { 'x-admin-code': adminCode }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOutrightResults(data.results || { champion: '', goldenBoot: '', goldenGlove: '', goldenBall: '' });
+        setOutrightPredictions(data.predictions || {});
+        setOutrightEvaluations(data.evaluations || {});
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải cấu hình outright:', err);
+    } finally {
+      setLoadingConfig(false);
+    }
+  };
+
+  const handleSaveOutrightConfig = async (newResults?: typeof outrightResults, newEvals?: typeof outrightEvaluations) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/outright-config', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode || ''
+        },
+        body: JSON.stringify({
+          adminCode,
+          results: newResults || outrightResults,
+          evaluations: newEvals || outrightEvaluations
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify('Tính toán và cập nhật điểm khấu trừ chung cuộc thành công!', 'success');
+        onRefresh();
+        fetchOutrightConfig();
+      } else {
+        onNotify(data.error || 'Lỗi lưu cấu hình', 'error');
+      }
+    } catch (e) {
+      onNotify('Lỗi kết nối máy chủ', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchPlayersList();
+    fetchOutrightConfig();
   }, [adminCode, matches]);
 
   // Call simulated time update
@@ -194,6 +241,8 @@ export default function AdminPanel({
           homeScore: homeScoreInput,
           awayScore: awayScoreInput,
           status: 'FINISHED',
+          homeTeam: homeTeamInput,
+          awayTeam: awayTeamInput,
           adminCode,
         }),
       });
@@ -264,10 +313,23 @@ export default function AdminPanel({
     }
   };
 
+  const filteredMatches = matches.filter((m) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      m.homeTeam.toLowerCase().includes(query) ||
+      m.awayTeam.toLowerCase().includes(query) ||
+      m.stage.toLowerCase().includes(query) ||
+      `trận ${m.id}`.includes(query)
+    );
+  });
+
   const startScoring = (match: Match) => {
     setUpdatingMatchId(match.id);
     setHomeScoreInput(String(match.homeScore ?? 0));
     setAwayScoreInput(String(match.awayScore ?? 0));
+    setHomeTeamInput(match.homeTeam || '');
+    setAwayTeamInput(match.awayTeam || '');
   };
 
   return (
@@ -669,14 +731,36 @@ export default function AdminPanel({
                       
                       {/* Versus info */}
                       <td className="py-4 px-4 text-center">
-                        <div className="flex items-center justify-center space-x-2 font-bold text-slate-200">
-                          <span>{m.homeTeam}</span>
-                          <span className="text-[10px] text-slate-550 lowercase font-medium">vs</span>
-                          <span>{m.awayTeam}</span>
-                        </div>
-                        <div className="text-[9.5px] text-slate-500 font-mono mt-0.5">
-                          {new Date(m.matchTime).toLocaleString('vi-VN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </div>
+                        {isBeingUpdated ? (
+                          <div className="flex flex-col space-y-1.5 items-center justify-center max-w-[160px] mx-auto">
+                            <input
+                              type="text"
+                              value={homeTeamInput}
+                              onChange={(e) => setHomeTeamInput(e.target.value)}
+                              className="w-full bg-slate-905 text-center text-[11px] font-bold border border-slate-700 rounded-lg py-1 px-1.5 text-slate-100 focus:outline-none focus:border-emerald-500"
+                              placeholder="Đội nhà"
+                            />
+                            <span className="text-[10px] text-slate-550 lowercase font-medium">vs</span>
+                            <input
+                              type="text"
+                              value={awayTeamInput}
+                              onChange={(e) => setAwayTeamInput(e.target.value)}
+                              className="w-full bg-slate-905 text-center text-[11px] font-bold border border-slate-700 rounded-lg py-1 px-1.5 text-slate-100 focus:outline-none focus:border-emerald-500"
+                              placeholder="Đội khách"
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-center space-x-2 font-bold text-slate-200">
+                              <span>{m.homeTeam}</span>
+                              <span className="text-[10px] text-slate-550 lowercase font-medium">vs</span>
+                              <span>{m.awayTeam}</span>
+                            </div>
+                            <div className="text-[9.5px] text-slate-500 font-mono mt-0.5">
+                              {new Date(m.matchTime).toLocaleString('vi-VN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </>
+                        )}
                       </td>
                       
                       {/* Score dials */}
@@ -771,6 +855,204 @@ export default function AdminPanel({
           </table>
         </div>
 
+      </div>
+
+      {/* SECTION: OUTRIGHT PREDICTIONS ADMINISTRATIVE REGION */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+        <div className="flex justify-between items-center pb-4 border-b border-slate-800/80">
+          <div>
+            <h2 className="text-base font-black text-slate-100 font-display flex items-center gap-2 uppercase">
+              🏆 Đánh giá kết quả chung cuộc (Outrights)
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Admin điền kết quả chính thức hoặc tích chọn trực tiếp những người đoán trúng để khấu trừ điểm tổng.
+            </p>
+          </div>
+          <button 
+            type="button"
+            onClick={fetchOutrightConfig} 
+            className="text-xs font-bold leading-normal bg-slate-800 hover:bg-slate-700 py-2 px-3.5 rounded-xl text-slate-350 transition shrink-0 cursor-pointer"
+          >
+            Nạp lại 🔃
+          </button>
+        </div>
+
+        {/* Inputs for Official Winners */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850/80 space-y-1.5">
+            <span className="block text-[10px] font-black uppercase tracking-wider text-slate-450">Đội Vô Địch (Champion)</span>
+            <input 
+              type="text" 
+              placeholder="Ví dụ: Pháp..." 
+              value={outrightResults.champion} 
+              onChange={e => setOutrightResults({ ...outrightResults, champion: e.target.value })}
+              className="w-full bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-100 rounded-xl py-2.5 px-3 focus:outline-none"
+            />
+          </div>
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850/80 space-y-1.5">
+            <span className="block text-[10px] font-black uppercase tracking-wider text-slate-450">Vua Phá Lưới (Golden Boot)</span>
+            <input 
+              type="text" 
+              placeholder="Tên cầu thủ..." 
+              value={outrightResults.goldenBoot} 
+              onChange={e => setOutrightResults({ ...outrightResults, goldenBoot: e.target.value })}
+              className="w-full bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-100 rounded-xl py-2.5 px-3 focus:outline-none"
+            />
+          </div>
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850/80 space-y-1.5">
+            <span className="block text-[10px] font-black uppercase tracking-wider text-slate-450">Thủ Môn xuất sắc</span>
+            <input 
+              type="text" 
+              placeholder="Tên thủ môn..." 
+              value={outrightResults.goldenGlove} 
+              onChange={e => setOutrightResults({ ...outrightResults, goldenGlove: e.target.value })}
+              className="w-full bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-100 rounded-xl py-2.5 px-3 focus:outline-none"
+            />
+          </div>
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850/80 space-y-1.5">
+            <span className="block text-[10px] font-black uppercase tracking-wider text-slate-450">Cầu Thủ xuất sắc</span>
+            <input 
+              type="text" 
+              placeholder="Tên cầu thủ..." 
+              value={outrightResults.goldenBall} 
+              onChange={e => setOutrightResults({ ...outrightResults, goldenBall: e.target.value })}
+              className="w-full bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-100 rounded-xl py-2.5 px-3 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <button 
+            type="button" 
+            onClick={() => handleSaveOutrightConfig()}
+            className="bg-emerald-600 hover:bg-emerald-500 font-extrabold text-xs text-white px-5 py-3 rounded-xl transition cursor-pointer hover:shadow-lg hover:shadow-emerald-500/10 shadow"
+          >
+            Lưu Kết Quả Oficial & Đồng Bộ Điểm Toàn Bộ
+          </button>
+        </div>
+
+        {/* Player Outright Predictions Matrix */}
+        <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/60">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-slate-950 text-slate-400 uppercase text-[9px] tracking-wider border-b border-slate-800">
+                <tr>
+                  <th className="py-3 px-4">Thành viên</th>
+                  <th className="py-3 px-4">Đội Vô Địch (-10đ)</th>
+                  <th className="py-3 px-4">Top Scorer (-5đ)</th>
+                  <th className="py-3 px-4">Thủ Môn xuất sắc (-5đ)</th>
+                  <th className="py-3 px-4">Cầu Thủ xuất sắc (-5đ)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-850 text-slate-300">
+                {playersList.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-500 italic">Chưa có người chơi nào đăng ký.</td>
+                  </tr>
+                ) : (
+                  playersList.map(item => {
+                    const pred = outrightPredictions[item.code] || {};
+                    const ev = outrightEvaluations[item.code] || {};
+
+                    const toggleEval = (field: 'championCorrect' | 'goldenBootCorrect' | 'goldenGloveCorrect' | 'goldenBallCorrect') => {
+                      const updatedEv = {
+                        ...outrightEvaluations,
+                        [item.code]: {
+                          ...ev,
+                          [field]: !ev[field]
+                        }
+                      };
+                      setOutrightEvaluations(updatedEv);
+                      handleSaveOutrightConfig(outrightResults, updatedEv);
+                    };
+
+                    return (
+                      <tr key={item.code} className="hover:bg-slate-900/40 transition">
+                        <td className="py-3.5 px-4">
+                          <span className="font-bold text-slate-250 block">{item.name}</span>
+                          <span className="block font-mono text-[9px] text-slate-550 mt-0.5">{item.code}</span>
+                        </td>
+                        
+                        {/* Champion */}
+                        <td className="py-3.5 px-4 space-y-1">
+                          <div className="font-bold text-slate-100 truncate max-w-40">{pred.champion || <span className="text-slate-650 italic font-medium">(trống)</span>}</div>
+                          {pred.champion && (
+                            <button 
+                              type="button"
+                              onClick={() => toggleEval('championCorrect')}
+                              className={`px-2 py-0.5 rounded text-[9px] font-black border transition cursor-pointer ${
+                                ev.championCorrect 
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+                                  : 'bg-rose-950/20 text-rose-455 border-rose-500/20 hover:border-rose-400/35'
+                              }`}
+                            >
+                              {ev.championCorrect ? 'ĐÚNG (Đã trừ 10đ) • ✅' : 'Kích hoạt trừ 10đ'}
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Top Scorer */}
+                        <td className="py-3.5 px-4 space-y-1">
+                          <div className="font-bold text-slate-100 truncate max-w-40">{pred.goldenBoot || <span className="text-slate-655 italic font-medium">(trống)</span>}</div>
+                          {pred.goldenBoot && (
+                            <button 
+                              type="button"
+                              onClick={() => toggleEval('goldenBootCorrect')}
+                              className={`px-2 py-0.5 rounded text-[9px] font-black border transition cursor-pointer ${
+                                ev.goldenBootCorrect 
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+                                  : 'bg-rose-950/20 text-rose-455 border-rose-500/20 hover:border-rose-400/35'
+                              }`}
+                            >
+                              {ev.goldenBootCorrect ? 'ĐÚNG (Đã trừ 5đ) • ✅' : 'Kích hoạt trừ 5đ'}
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Golden Glove */}
+                        <td className="py-3.5 px-4 space-y-1">
+                          <div className="font-bold text-slate-100 truncate max-w-40">{pred.goldenGlove || <span className="text-slate-655 italic font-medium">(trống)</span>}</div>
+                          {pred.goldenGlove && (
+                            <button 
+                              type="button"
+                              onClick={() => toggleEval('goldenGloveCorrect')}
+                              className={`px-2 py-0.5 rounded text-[9px] font-black border transition cursor-pointer ${
+                                ev.goldenGloveCorrect 
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+                                  : 'bg-rose-950/20 text-rose-455 border-rose-500/20 hover:border-rose-400/35'
+                              }`}
+                            >
+                              {ev.goldenGloveCorrect ? 'ĐÚNG (Đã trừ 5đ) • ✅' : 'Kích hoạt trừ 5đ'}
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Golden Ball */}
+                        <td className="py-3.5 px-4 space-y-1">
+                          <div className="font-bold text-slate-100 truncate max-w-40">{pred.goldenBall || <span className="text-slate-655 italic font-medium">(trống)</span>}</div>
+                          {pred.goldenBall && (
+                            <button 
+                              type="button"
+                              onClick={() => toggleEval('goldenBallCorrect')}
+                              className={`px-2 py-0.5 rounded text-[9px] font-black border transition cursor-pointer ${
+                                ev.goldenBallCorrect 
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+                                  : 'bg-rose-950/20 text-rose-455 border-rose-500/20 hover:border-rose-400/35'
+                              }`}
+                            >
+                              {ev.goldenBallCorrect ? 'ĐÚNG (Đã trừ 5đ) • ✅' : 'Kích hoạt trừ 5đ'}
+                            </button>
+                          )}
+                        </td>
+
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
     </div>
