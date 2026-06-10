@@ -153,6 +153,32 @@ export default function AdminPanel({
     }
   };
 
+  // Synchronize matches with worldcup26.ir API
+  const handleSyncAPI = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/matches/sync', { 
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode || ''
+        },
+        body: JSON.stringify({ adminCode })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify(data.message || 'Đồng bộ kết quả từ API thành công!', 'success');
+        onRefresh();
+      } else {
+        onNotify(data.error || 'Lỗi đồng bộ API', 'error');
+      }
+    } catch (e) {
+      onNotify('Lỗi kết nối máy chủ khi gọi API', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Submit Match Score
   const handleUpdateScore = async (matchId: string) => {
     setIsLoading(true);
@@ -247,6 +273,70 @@ export default function AdminPanel({
   return (
     <div id="admin-panel-container" className="space-y-6 animate-fade-in">
       
+      {/* QUICK TESTING SUITE BENTO CARD */}
+      <div className="bg-slate-900 border border-amber-500/35 rounded-3xl p-6 shadow-xl space-y-4">
+        <div className="flex items-center space-x-3">
+          <div className="p-2.5 bg-amber-500/10 rounded-2xl text-amber-400">
+            <ShieldAlert className="w-5 h-5 animate-pulse" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-100 font-display">Hộp Kiểm Thử Tính Năng (Vận hành & Chạy thử)</h2>
+            <div className="text-[11px] text-amber-400 font-bold uppercase tracking-wider mt-0.5">3 Bước Đơn Giản kiểm chứng: Khóa 15p • Bình chọn • Tính điểm</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {/* Step 1: Lock 15p */}
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-2.5">
+            <div className="flex items-center space-x-2 text-xs font-black uppercase text-amber-400">
+              <span className="bg-amber-500/10 text-amber-400 w-5 h-5 flex items-center justify-center rounded-full border border-amber-500/20 font-mono text-[10px]">1</span>
+              <span>Test Khóa 15 Phút</span>
+            </div>
+            <p className="text-[11.5px] text-slate-350 leading-relaxed font-sans">
+              Dự đoán của mỗi trận sẽ tự động bị khóa sau <strong>15 phút bóng lăn</strong> (tính từ giờ bắt đầu trận đấu).
+            </p>
+            <div className="bg-slate-900/60 p-2 rounded-xl text-[10.5px] text-slate-400 space-y-1.5 border border-slate-850">
+              <div>• Chọn <strong className="text-emerald-400">"🟢 Phút thứ 10"</strong> ở bên dưới: Trận 1 (đầu tiên) đang mở và có thể bình chọn.</div>
+              <div>• Chọn <strong className="text-rose-400">"🔴 Phút thứ 20"</strong>: Trận 1 lập tức bị khóa, trong khi các trận muộn hơn vẫn mở!</div>
+            </div>
+          </div>
+
+          {/* Step 2: Voting */}
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-2.5">
+            <div className="flex items-center space-x-2 text-xs font-black uppercase text-cyan-400">
+              <span className="bg-cyan-500/10 text-cyan-400 w-5 h-5 flex items-center justify-center rounded-full border border-cyan-500/20 font-mono text-[10px]">2</span>
+              <span>Test Bình Chọn</span>
+            </div>
+            <p className="text-[11.5px] text-slate-350 leading-relaxed font-sans">
+              Đăng nhập bằng mã của bạn hoặc tạo tài khoản mới ngay trên cột bên trái giao diện.
+            </p>
+            <div className="bg-slate-900/60 p-2 rounded-xl text-[10.5px] text-slate-400 space-y-1.5 border border-slate-850">
+              <div>• Sang tab <strong>"Lịch thi đấu"</strong>, chọn trận bóng đang mở.</div>
+              <div>• Click chọn <strong>Thắng</strong>, <strong>Hòa</strong>, hoặc <strong>Thua</strong>. Lựa chọn của bạn sẽ được lưu ngay lên máy chủ.</div>
+            </div>
+          </div>
+
+          {/* Step 3: Scoring */}
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-2.5">
+            <div className="flex items-center space-x-2 text-xs font-black uppercase text-emerald-400">
+              <span className="bg-emerald-500/10 text-emerald-400 w-5 h-5 flex items-center justify-center rounded-full border border-emerald-500/20 font-mono text-[10px]">3</span>
+              <span>Test Ghi Điểm</span>
+            </div>
+            <p className="text-[11.5px] text-slate-350 leading-relaxed font-sans">
+              Kiểm tra điểm số tự động cập nhật và nhảy thứ hạng trên Leaderboard ngay sau khi cập nhật kết quả.
+            </p>
+            <div className="bg-slate-900/60 p-2 rounded-xl text-[10.5px] text-slate-400 space-y-1.5 border border-slate-850">
+              <div>• Đi sang mục <strong>"Ghi Nhận Tỉ Số Ban Tổ Chức"</strong> ở bên dưới.</div>
+              <div>• Nhập tỉ số của Trận 1, click <strong>"Cập nhật"</strong>. Điểm số của ai đoán đúng sẽ tự động tăng 1 điểm!</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-emerald-500/5 p-3 rounded-2xl border border-emerald-500/10 text-[11px] text-emerald-400 leading-normal font-medium">
+          💡 <strong>Mẹo nhỏ:</strong> Bạn có thể nhấn nút <strong className="underline">"Nạp 10 người chơi ảo & 150+ dự đoán mẫu"</strong> ở card điều khiển phía bên dưới để tự động tạo trước 10 người chơi ảo cùng vô số dự đoán thô giúp phần kiểm nghiệm tính điểm sinh động nhất!
+        </div>
+      </div>
+      
       {/* Simulation Controls Card (Bento Rounded 3xl) */}
       <div className="bg-slate-900 border border-emerald-500/20 rounded-3xl p-6 shadow-xl space-y-4">
         
@@ -318,19 +408,19 @@ export default function AdminPanel({
                   📅 Trước khai mạc (08/06)
                 </button>
                 <button
-                  onClick={() => handleSetTime('2026-06-11T15:50:00Z')}
+                  onClick={() => handleSetTime('2026-06-11T18:50:00Z')}
                   className="bg-slate-900 hover:bg-slate-850 text-slate-300 text-[10px] py-1.5 px-2.5 rounded-lg font-bold border border-slate-800 hover:border-slate-700 transition"
                 >
                   ⚽ Trận 1 khởi tranh (11/06)
                 </button>
                 <button
-                  onClick={() => handleSetTime('2026-06-11T16:10:00Z')}
+                  onClick={() => handleSetTime('2026-06-11T19:10:00Z')}
                   className="bg-slate-900 hover:bg-slate-850 text-amber-400 text-[10px] py-1.5 px-2.5 rounded-lg font-bold border border-amber-500/15 hover:border-amber-500/30 transition"
                 >
                   🟢 Phút thứ 10 (Vẫn mở cổng đoán)
                 </button>
                 <button
-                  onClick={() => handleSetTime('2026-06-11T16:20:00Z')}
+                  onClick={() => handleSetTime('2026-06-11T19:20:00Z')}
                   className="bg-slate-900 hover:bg-slate-850 text-rose-455 text-[10px] py-1.5 px-2.5 rounded-lg font-bold border border-rose-500/15 hover:border-rose-500/30 transition"
                 >
                   🔴 Phút thứ 20 (Khóa đoán vĩnh viễn!)
@@ -363,6 +453,16 @@ export default function AdminPanel({
               >
                 <UserPlus className="w-4 h-4 shrink-0" />
                 <span>Nạp 10 người chơi ảo & 150+ dự đoán mẫu</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSyncAPI}
+                disabled={isLoading}
+                className="w-full bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/25 hover:border-blue-500/45 text-xs font-bold py-3 px-4 rounded-xl transition flex items-center justify-center space-x-2 shadow-sm cursor-pointer active:scale-98"
+              >
+                <RefreshCw className={`w-4 h-4 shrink-0 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>Đồng bộ tỉ số & kết quả live từ API (worldcup26.ir)</span>
               </button>
 
               {!showResetConfirm ? (

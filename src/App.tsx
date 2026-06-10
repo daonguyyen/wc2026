@@ -143,7 +143,7 @@ export default function App() {
   // Handle Match Prediction Votes
   const handleVote = async (matchId: string, prediction: 'HOME' | 'DRAW' | 'AWAY') => {
     if (!player) {
-      notify('Bạn phải đăng nhập số điện thoại để thực hiện bình chọn!', 'error');
+      notify('Bạn phải đăng nhập để bình chọn bằng mã 6 số!', 'error');
       return;
     }
 

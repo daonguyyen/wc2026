@@ -19,18 +19,38 @@ interface MatchListProps {
 }
 
 const TEAM_FLAGS: Record<string, string> = {
-  'Mexico': '🇲🇽', 'Ecuador': '🇪🇨', 'Venezuela': '🇻🇪', 'Jamaica': '🇯🇲',
-  'Canada': '🇨🇦', 'Argentina': '🇦🇷', 'Peru': '🇵🇪', 'Chile': '🇨🇱',
-  'Mỹ (USA)': '🇺🇸', 'Uruguay': '🇺🇾', 'Panama': '🇵🇦', 'Bolivia': '🇧🇴',
-  'Brazil': '🇧🇷', 'Colombia': '🇨🇴', 'Paraguay': '🇵🇾', 'Costa Rica': '🇨🇷',
+  // Hosts & CONCACAF
+  'Mỹ (USA)': '🇺🇸', 'Mỹ': '🇺🇸', 'Hoa Kỳ': '🇺🇸', 'USA': '🇺🇸',
+  'Mexico': '🇲🇽', 'Canada': '🇨🇦', 'Costa Rica': '🇨🇷', 'Panama': '🇵🇦', 'Jamaica': '🇯🇲', 'Haiti': '🇭🇹',
+  
+  // CONMEBOL
+  'Argentina': '🇦🇷', 'Brazil': '🇧🇷', 'Uruguay': '🇺🇾', 'Colombia': '🇨🇴', 'Ecuador': '🇪🇨', 
+  'Paraguay': '🇵🇾', 'Venezuela': '🇻🇪', 'Chile': '🇨🇱', 'Peru': '🇵🇪', 'Bolivia': '🇧🇴',
+
+  // UEFA
   'Pháp (France)': '🇫🇷', 'Hà Lan': '🇳🇱', 'Ba Lan': '🇵🇱', 'Áo': '🇦🇹',
   'Bỉ (Belgium)': '🇧🇪', 'Slovakia': '🇸🇰', 'Romania': '🇷🇴', 'Ukraine': '🇺🇦',
-  'Đức (Germany)': '🇩🇪', 'Hungary': '🇭🇺', 'Thụy Sĩ': '🇨🇭', 'Scotland': '🏴',
+  'Đức (Germany)': '🇩🇪', 'Hungary': '🇭🇺', 'Thụy Sĩ': '🇨🇭', 'Scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
   'Tây Ban Nha': '🇪🇸', 'Croatia': '🇭🇷', 'Ý (Italy)': '🇮🇹', 'Albania': '🇦🇱',
-  'Anh (England)': '🏴', 'Đan Mạch': '🇩🇰', 'Slovenia': '🇸🇮', 'Serbia': '🇷🇸',
+  'Anh (England)': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Đan Mạch': '🇩🇰', 'Slovenia': '🇸🇮', 'Serbia': '🇷🇸',
   'Bồ Đào Nha': '🇵🇹', 'Thổ Nhĩ Kỳ': '🇹🇷', 'Georgia': '🇬🇪', 'CH Séc': '🇨🇿',
-  'Ma-rốc (Morocco)': '🇲🇦', 'CHDC Công-gô': '🇨🇩', 'Zambia': '🇿🇲', 'Tanzania': '🇹🇿',
-  'Nhật Bản (Japan)': '🇯🇵', 'Úc (Australia)': '🇦🇺', 'Ả Rập Xê-út': '🇸🇦', 'Bahrain': '🇧🇭'
+  'Bosnia & Herzegovina': '🇧🇦', 'Na Uy': '🇳🇴', 'Thụy Điển': '🇸🇪',
+
+  // CAF
+  'Ma-rốc (Morocco)': '🇲🇦', 'Senegal': '🇸🇳', 'Ai Cập': '🇪🇬', 'Nigeria': '🇳🇬', 'Algeria': '🇩🇿',
+  'Bờ Biển Ngà': '🇨🇮', 'Tunisia': '🇹🇳', 'Cameroon': '🇨🇲', 'Mali': '🇲🇱', 'Nam Phi': '🇿🇦',
+  'CHDC Công-gô': '🇨🇩', 'Zambia': '🇿🇲', 'Tanzania': '🇹🇿', 'Cape Verde': '🇨🇻', 'Ghana': '🇬🇭',
+
+  // AFC
+  'Nhật Bản (Japan)': '🇯🇵', 'Hàn Quốc': '🇰🇷', 'Iran': '🇮🇷', 'Úc (Australia)': '🇦🇺', 
+  'Ả Rập Xê-út': '🇸🇦', 'Iraq': '🇮🇶', 'Qatar': '🇶🇦', 'Uzbekistan': '🇺🇿', 'Bahrain': '🇧🇭',
+  'Jordan': '🇯🇴',
+
+  // OFC
+  'New Zealand': '🇳🇿',
+
+  // Others
+  'Curaçao': '🇨🇼'
 };
 
 function getTeamFlag(teamName: string): string {
@@ -399,7 +419,7 @@ export default function MatchList({
                       onClick={onOpenLogin}
                       className="w-full text-center text-[10px] font-bold text-amber-400 bg-amber-500/5 hover:bg-amber-500/10 py-2.5 rounded-xl border border-amber-500/10 hover:border-amber-500/25 transition cursor-pointer uppercase tracking-wider font-display"
                     >
-                      🔒 Đăng nhập SĐT để tiến hành bình chọn
+                      🔒 Đăng nhập để bình chọn bằng mã 6 số
                     </button>
                   ) : userPred ? (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] px-3.5 bg-slate-950/70 py-2.5 rounded-xl border border-slate-850/60 gap-2">

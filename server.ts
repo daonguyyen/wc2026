@@ -45,7 +45,7 @@ function isAdmin(req: express.Request): boolean {
   return player && player.name === 'Usr-Bop';
 }
 
-// Seed 6 default users with patternless random-looking passcodes
+// Seed default users with patternless random-looking passcodes
 function seedDefaultPlayers() {
   const defaultPlayers = [
     { name: 'Usr-Dần', code: '582914' },
@@ -54,6 +54,9 @@ function seedDefaultPlayers() {
     { name: 'Usr-Bảy', code: '925183' },
     { name: 'Usr-Bo', code: '260341' },
     { name: 'Usr-Bi', code: '815729' },
+    { name: 'Usr-Sáu', code: '492815' },
+    { name: 'Usr-Ninh', code: '318529' },
+    { name: 'Usr-Hòa', code: '674913' },
   ];
 
   // Clean up any historical old sequential codes if present
@@ -86,11 +89,28 @@ function loadDB() {
       if (!db.matches || db.matches.length === 0) {
         db.matches = generate104Matches().map(m => ({ ...m, visible: Number(m.id) <= 8 }));
       } else {
-        // Ensure visible flag is defined on all loaded matches, default to true for the first 8 matches
-        db.matches = db.matches.map(m => ({
-          ...m,
-          visible: m.visible !== undefined ? m.visible : Number(m.id) <= 8
-        }));
+        // Migration: Detect old matches data (awayTeam is not Nam Phi for match 1)
+        const firstMatch = db.matches.find(m => m.id === '1');
+        if (firstMatch && firstMatch.awayTeam !== 'Nam Phi') {
+          console.log('Phát hiện dữ liệu trận đấu cũ, tự động di cư sang World Cup 2026 chuẩn...');
+          db.matches = generate104Matches().map(m => ({ ...m, visible: Number(m.id) <= 8 }));
+          db.predictions = {}; // Clean old predictions since teams have changed
+        } else {
+          // Reconcile/align database match times, team names & stages with generate104Matches() to apply accurate translations and scheduling
+          const sourceMatches = generate104Matches();
+          db.matches = db.matches.map(m => {
+            const src = sourceMatches.find(s => s.id === m.id);
+            if (!src) return m;
+            return {
+              ...m,
+              homeTeam: src.homeTeam,
+              awayTeam: src.awayTeam,
+              matchTime: src.matchTime,
+              stage: src.stage,
+              visible: m.visible !== undefined ? m.visible : Number(m.id) <= 8
+            };
+          });
+        }
       }
       seedDefaultPlayers();
       saveDB();
@@ -236,6 +256,102 @@ app.post('/api/matches/update-score', (req, res) => {
 
   saveDB();
   res.json({ message: 'Cập nhật tỉ số và tính điểm người chơi thành công!', match });
+});
+
+// Endpoint to synchronize match results from worldcup26.ir API (can be automated or manually triggered)
+app.post('/api/matches/sync', async (req, res) => {
+  if (!isAdmin(req)) {
+    return res.status(403).json({ error: 'Quyền admin bị từ chối! Hoạt động đồng bộ chỉ dành cho tài khoản Admin.' });
+  }
+
+  try {
+    const response = await fetch('https://worldcup26.ir/get/games');
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Lỗi khi gọi API worldcup26.ir để đồng bộ' });
+    }
+    const data = await response.json() as any;
+    if (!data.games || !Array.isArray(data.games)) {
+      return res.status(400).json({ error: 'Dữ liệu API không đúng định dạng' });
+    }
+
+    let updatedCount = 0;
+    let finishedNewCount = 0;
+
+    for (const g of data.games) {
+      const match = db.matches.find(m => m.id === g.id);
+      if (match) {
+        let changed = false;
+
+        // Check scores
+        const homeScore = g.home_score !== "null" && g.home_score !== null ? parseInt(g.home_score, 10) : undefined;
+        const awayScore = g.away_score !== "null" && g.away_score !== null ? parseInt(g.away_score, 10) : undefined;
+        
+        let status: 'SCHEDULED' | 'LIVE' | 'FINISHED' = 'SCHEDULED';
+        if (g.finished === "TRUE") {
+          status = 'FINISHED';
+        } else if (g.time_elapsed !== "notstarted" && g.time_elapsed !== "null" && g.time_elapsed !== null) {
+          status = 'LIVE';
+        }
+
+        // Check if anything is updated
+        if (match.status !== status || match.homeScore !== homeScore || match.awayScore !== awayScore) {
+          match.status = status;
+          match.homeScore = homeScore;
+          match.awayScore = awayScore;
+          
+          if (status === 'FINISHED' && homeScore !== undefined && awayScore !== undefined) {
+            let winner: 'HOME' | 'DRAW' | 'AWAY' = 'DRAW';
+            if (homeScore > awayScore) winner = 'HOME';
+            else if (homeScore < awayScore) winner = 'AWAY';
+            match.winner = winner;
+
+            // Recalculate predictions points for this match
+            const predictionsList = Object.values(db.predictions).filter((p) => p.matchId === String(match.id));
+            for (const pred of predictionsList) {
+              const soccerWinner = match.winner!;
+              const isCorrect = pred.prediction === soccerWinner;
+              pred.points = isCorrect ? 1 : 0;
+              pred.evaluated = true;
+              db.predictions[`${pred.playerPhone}_${pred.matchId}`] = pred;
+            }
+            finishedNewCount++;
+          }
+          
+          changed = true;
+        }
+
+        if (changed) {
+          updatedCount++;
+        }
+      }
+    }
+
+    if (updatedCount > 0) {
+      // Recalculate player scores if there are new scores or results evaluations
+      for (const phone of Object.keys(db.players)) {
+        let playerTotalPoints = 0;
+        const playerPreds = Object.values(db.predictions).filter((p) => p.playerPhone === phone);
+        for (const p of playerPreds) {
+          if (p.evaluated && p.points > 0) {
+            playerTotalPoints += p.points;
+          }
+        }
+        db.players[phone].score = playerTotalPoints;
+      }
+      
+      saveDB();
+    }
+
+    res.json({
+      message: `Đồng bộ hoàn tất! Cập nhật ${updatedCount} trận đấu mới, trong đó có ${finishedNewCount} trận vừa hoàn thành.`,
+      updatedCount,
+      finishedNewCount
+    });
+
+  } catch (err: any) {
+    console.error('API Sync Error:', err);
+    res.status(500).json({ error: `Lỗi bất ngờ xảy ra khi đồng bộ: ${err.message}` });
+  }
 });
 
 // 5. Auth: Login/Register with 6-char code & name
@@ -468,8 +584,8 @@ app.post('/api/admin/generate-demo', (req, res) => {
   if (!isAdmin(req)) {
     return res.status(403).json({ error: 'Quyền admin bị từ chối! Chức năng này chỉ dành cho tài khoản Admin.' });
   }
-  const names = ['Usr-Dần', 'Usr-Bin', 'Usr-Bop', 'Usr-Bảy', 'Usr-Bo', 'Usr-Bi', 'Trọng Tài', 'Khách VIP', 'Bình Luận', 'Chuyên Gia'];
-  const phones = ['582914', '719462', '348105', '925183', '260341', '815729', '491730', '602854', '137496', '850143'];
+  const names = ['Usr-Dần', 'Usr-Bin', 'Usr-Bop', 'Usr-Bảy', 'Usr-Bo', 'Usr-Bi', 'Usr-Sáu', 'Usr-Ninh', 'Usr-Hòa', 'Trọng Tài', 'Khách VIP', 'Bình Luận', 'Chuyên Gia'];
+  const phones = ['582914', '719462', '348105', '925183', '260341', '815729', '492815', '318529', '674913', '491730', '602854', '137496', '850143'];
 
   // Add players
   for (let i = 0; i < names.length; i++) {
