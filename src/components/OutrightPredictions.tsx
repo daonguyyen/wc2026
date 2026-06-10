@@ -40,6 +40,7 @@ export default function OutrightPredictions({
   const [loading, setLoading] = useState(false);
   const [countdownText, setCountdownText] = useState('');
   const [isLocked, setIsLocked] = useState(false);
+  const [teams, setTeams] = useState<string[]>([]);
 
   // Filter the list of 48 World Cup teams from matches
   const getUniqueTeams = (): string[] => {
@@ -55,7 +56,23 @@ export default function OutrightPredictions({
     return Array.from(new Set(filtered)).sort();
   };
 
-  const teams = getUniqueTeams();
+  // Load available 48 teams from dedicated teams endpoint to handle regular users who don't see all matches
+  const fetchTeams = async () => {
+    try {
+      const res = await fetch('/api/teams');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.teams && data.teams.length > 0) {
+          setTeams(data.teams);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Lỗi khi nạp danh sách đội tuyển từ API /api/teams:', err);
+    }
+    // Fallback if API fails or for offline support
+    setTeams(getUniqueTeams());
+  };
 
   // Load existing player's selections
   const fetchMyOutright = async () => {
@@ -80,6 +97,7 @@ export default function OutrightPredictions({
   };
 
   useEffect(() => {
+    fetchTeams();
     fetchMyOutright();
   }, [playerPhone, matches]);
 
