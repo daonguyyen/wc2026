@@ -470,7 +470,7 @@ export default function App() {
                       {isRegisterMode ? 'Đăng Ký Tài Khoản' : 'Chọn Vào Dự Đoán'}
                     </h3>
                   </div>
-                  {/* <button
+                  <button
                     type="button"
                     onClick={() => {
                       setIsRegisterMode(!isRegisterMode);
@@ -481,7 +481,7 @@ export default function App() {
                     className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-900/20 px-2.5 py-1 rounded-full border border-emerald-500/10 hover:border-emerald-500/30 transition cursor-pointer"
                   >
                     {isRegisterMode ? 'Về Đăng nhập' : 'Tạo Acc mới 🆕'}
-                  </button> */}
+                  </button>
                 </div>
 
                 {/* Main Dynamic Form */}
@@ -572,7 +572,7 @@ export default function App() {
               </span>
               <ul className="text-[11px] text-slate-400 space-y-2.5 list-disc pl-4 leading-relaxed">
                 <li>Đăng nhập để lưu dự đoán trận đấu & dự đoán chung cuộc (outrights).</li>
-                <li><strong>Cách tính điểm:</strong> Mỗi dự đoán <span className="text-rose-400 font-semibold">Sai nhận +1 điểm</span>, đoán đúng nhận <span className="text-emerald-400 font-semibold">0 điểm</span>. <strong>Ai ít điểm nhất sẽ thắng cuộc!</strong></li>
+                <li><strong>Cách tính điểm:</strong> Mỗi dự đoán <span className="text-rose-400 font-semibold">Sai hoặc Quên bình chọn</span> khi khóa cửa nhận <span className="text-rose-400 font-semibold">+1 điểm</span>, đoán đúng nhận <span className="text-emerald-400 font-semibold">0 điểm</span>. <strong>Ai ít điểm nhất sẽ thắng cuộc!</strong></li>
                 <li><strong>Khấu trừ dài hạn:</strong> Đoán đúng Champion được <span className="text-emerald-400 font-bold">trừ -10đ</span>, đúng Vua phá lưới / Găng tay Vàng / Quả bóng Vàng được <span className="text-emerald-400 font-bold">trừ -5đ</span> vào điểm tổng.</li>
                 <li>Mở khóa dự đoán dài hạn trước <strong>00h00 ngày 19/06/2026</strong>. Sau giờ này sẽ khóa 🔒.</li>
               </ul>

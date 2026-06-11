@@ -346,9 +346,9 @@ export default function MatchList({
         <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
         <div>
           <span className="font-bold text-amber-400">LUẬT BÌNH CHỌN: </span>
-          Mỗi lượt đoán chính xác mang lại <span className="text-emerald-400 font-bold">+1 điểm</span>. 
+          Mỗi dự đoán <span className="text-rose-405 font-bold">Sai hoặc Quên dự đoán</span> nhận <span className="text-rose-400 font-bold">+1 điểm</span> (đoán Đúng nhận <span className="text-emerald-400 font-bold">0 điểm</span>, ít điểm nhất thắng cuộc). 
           Khung giờ bình chọn chỉ mở hợp pháp trước trận đấu và kéo dài đúng <strong>15 phút đầu tiên</strong> (T + 15') kể từ lúc bóng lăn. 
-          Quá thời gian trên cổng bình chọn hoặc chỉnh sửa sẽ <span className="text-rose-400 font-semibold border-b border-rose-455/30">bị khóa vĩnh viễn 🔒</span> và vạch kết quả trận đó xem như không có điểm.
+          Quá thời gian trên cổng bình chọn hoặc chỉnh sửa sẽ <span className="text-rose-400 font-semibold border-b border-rose-455/30">bị khóa vĩnh viễn 🔒</span> và ai quên không bầu cũng bị cộng thêm 1 điểm.
         </div>
       </div>
 
