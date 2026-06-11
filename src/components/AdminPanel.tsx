@@ -1323,7 +1323,7 @@ export default function AdminPanel({
             <table className="w-full text-xs text-left border-collapse">
               <thead className="bg-slate-950 text-slate-400 uppercase text-[9px] tracking-wider border-b border-slate-800 sticky top-0 z-10">
                 <tr>
-                  <th className="py-3 px-4">Thời gian bình chọn (UTC)</th>
+                  <th className="py-3 px-4">Thời gian bình chọn (GMT+7)</th>
                   <th className="py-3 px-4">Thành viên</th>
                   <th className="py-3 px-4">Trận đấu</th>
                   <th className="py-3 px-3 text-center">Lựa chọn</th>
@@ -1342,7 +1342,7 @@ export default function AdminPanel({
                 ) : (
                   filteredHistory.map((h, idx) => {
                     const formattedDate = h.votedAt 
-                      ? new Date(h.votedAt).toLocaleString('vi-VN', { timeZone: 'UTC' }) + ' (UTC)'
+                      ? new Date(h.votedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
                       : '(chưa rõ thời gian)';
                     return (
                       <tr key={`${h.playerPhone}_${h.matchId}_${idx}`} className="hover:bg-slate-900/40 transition">
