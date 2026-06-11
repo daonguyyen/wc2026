@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Match } from '../types';
 import { 
   Sliders, RefreshCw, UserPlus, FileWarning, Calendar, Check, Search, 
-  ShieldAlert, Eye, EyeOff, Lock, Unlock, Users, Loader2 
+  ShieldAlert, Eye, EyeOff, Lock, Unlock, Users, Loader2, Download, Upload, History, Database, Trash2
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -47,6 +47,25 @@ export default function AdminPanel({
   const [outrightEvaluations, setOutrightEvaluations] = useState<Record<string, any>>({});
   const [loadingConfig, setLoadingConfig] = useState(false);
 
+  // States for user voting history and backups
+  const [historyList, setHistoryList] = useState<{
+    playerPhone: string;
+    playerName: string;
+    matchId: string;
+    homeTeam: string;
+    awayTeam: string;
+    prediction: 'HOME' | 'DRAW' | 'AWAY';
+    votedAt: string;
+    points: number;
+    evaluated: boolean;
+    matchStatus: string;
+  }[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const [backupsList, setBackupsList] = useState<{ filename: string; size: number; mtime: string }[]>([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
+
   // Fetch registered players with direct passcode access
   const fetchPlayersList = async () => {
     if (!adminCode) return;
@@ -64,6 +83,204 @@ export default function AdminPanel({
     } finally {
       setLoadingPlayers(false);
     }
+  };
+
+  // Fetch predictions history
+  const fetchPredictionsHistory = async () => {
+    if (!adminCode) return;
+    setLoadingHistory(true);
+    try {
+      const res = await fetch('/api/admin/predictions-history', {
+        headers: { 'x-admin-code': adminCode }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHistoryList(data.history || []);
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải lịch sử bình chọn:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  // Fetch backups from server
+  const fetchBackupsList = async () => {
+    if (!adminCode) return;
+    setLoadingBackups(true);
+    try {
+      const res = await fetch('/api/admin/backups/list', {
+        headers: { 'x-admin-code': adminCode }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBackupsList(data.backups || []);
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải danh sách bản sao lưu:', err);
+    } finally {
+      setLoadingBackups(false);
+    }
+  };
+
+  // Create manual backup on server
+  const handleCreateBackup = async () => {
+    if (!adminCode) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/backups/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode
+        },
+        body: JSON.stringify({ adminCode })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify(data.message || 'Tạo sao lưu thành công!', 'success');
+        fetchBackupsList();
+      } else {
+        onNotify(data.error || 'Lỗi tạo sao lưu', 'error');
+      }
+    } catch (err) {
+      onNotify('Lỗi kết nối máy chủ khi tạo sao lưu', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Restore server backup
+  const handleRestoreBackup = async (filename: string) => {
+    if (!adminCode || !filename) return;
+    if (!window.confirm(`Bạn có chắc muốn khôi phục dữ liệu từ bản sao lưu "${filename}" không? Toàn bộ điểm số hiện tại sẽ bị ghi đè.`)) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/backups/restore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode
+        },
+        body: JSON.stringify({ adminCode, filename })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify(data.message || 'Khôi phục sao lưu thành công!', 'success');
+        onRefresh();
+        fetchPlayersList();
+        fetchPredictionsHistory();
+        fetchOutrightConfig();
+      } else {
+        onNotify(data.error || 'Lỗi khôi phục', 'error');
+      }
+    } catch (err) {
+      onNotify('Lỗi kết nối khôi phục', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Delete server backup
+  const handleDeleteBackup = async (filename: string) => {
+    if (!adminCode || !filename) return;
+    if (!window.confirm(`Bạn có chắc muốn xóa bản sao lưu "${filename}" không?`)) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/backups/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode
+        },
+        body: JSON.stringify({ adminCode, filename })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify(data.message || 'Xóa thành công!', 'success');
+        fetchBackupsList();
+      } else {
+        onNotify(data.error || 'Lỗi khi xóa', 'error');
+      }
+    } catch (err) {
+      onNotify('Lỗi kết nối khi xóa', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Export backup file download
+  const handleExportBackupFile = async () => {
+    if (!adminCode) return;
+    try {
+      const res = await fetch('/api/admin/export-all', { headers: { 'x-admin-code': adminCode } });
+      if (res.ok) {
+        const backupDataObj = await res.json();
+        
+        const blob = new Blob([JSON.stringify(backupDataObj, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `worldcup26_backup_full_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        onNotify('Tải xuống tệp sao lưu JSON thành công!', 'success');
+      } else {
+        onNotify('Lỗi khi tải dữ liệu sao lưu từ máy chủ', 'error');
+      }
+    } catch (err) {
+      onNotify('Lỗi chuẩn bị tệp tin sao lưu: ' + err, 'error');
+    }
+  };
+
+  // Import backup file from browser
+  const handleImportBackupFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!adminCode) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const raw = event.target?.result as string;
+        const backupDataObj = JSON.parse(raw);
+        
+        if (!backupDataObj.players || !backupDataObj.predictions) {
+          onNotify('Tệp sao lưu không đúng cấu trúc (thiếu players hoặc predictions)!', 'error');
+          return;
+        }
+        
+        setIsLoading(true);
+        const res = await fetch('/api/admin/backups/import-direct', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-code': adminCode
+          },
+          body: JSON.stringify({ adminCode, backupData: backupDataObj })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          onNotify(data.message || 'Import dữ liệu thành công!', 'success');
+          onRefresh();
+          fetchPlayersList();
+          fetchPredictionsHistory();
+          fetchOutrightConfig();
+          fetchBackupsList();
+        } else {
+          onNotify(data.error || 'Lỗi khi import', 'error');
+        }
+      } catch (err) {
+        onNotify('Lỗi đọc nội dung file sao lưu!', 'error');
+      } finally {
+        setIsLoading(false);
+        e.target.value = '';
+      }
+    };
+    reader.readAsText(file);
   };
 
   const fetchOutrightConfig = async () => {
@@ -119,6 +336,8 @@ export default function AdminPanel({
   useEffect(() => {
     fetchPlayersList();
     fetchOutrightConfig();
+    fetchPredictionsHistory();
+    fetchBackupsList();
   }, [adminCode, matches]);
 
   // Call simulated time update
@@ -323,6 +542,18 @@ export default function AdminPanel({
       `trận ${m.id}`.includes(query)
     );
   });
+  
+  const filteredHistory = historyList.filter(h => {
+    const query = historySearch.toLowerCase().trim();
+    if (!query) return true;
+    return (
+      h.playerName.toLowerCase().includes(query) ||
+      h.playerPhone.toLowerCase().includes(query) ||
+      h.homeTeam.toLowerCase().includes(query) ||
+      h.awayTeam.toLowerCase().includes(query) ||
+      h.matchId.includes(query)
+    );
+  });
 
   const startScoring = (match: Match) => {
     setUpdatingMatchId(match.id);
@@ -336,6 +567,7 @@ export default function AdminPanel({
     <div id="admin-panel-container" className="space-y-6 animate-fade-in">
       
       {/* QUICK TESTING SUITE BENTO CARD */}
+      {false && (
       <div className="bg-slate-900 border border-amber-500/35 rounded-3xl p-6 shadow-xl space-y-4">
         <div className="flex items-center space-x-3">
           <div className="p-2.5 bg-amber-500/10 rounded-2xl text-amber-400">
@@ -398,6 +630,7 @@ export default function AdminPanel({
           💡 <strong>Mẹo nhỏ:</strong> Bạn có thể nhấn nút <strong className="underline">"Nạp 10 người chơi ảo & 150+ dự đoán mẫu"</strong> ở card điều khiển phía bên dưới để tự động tạo trước 10 người chơi ảo cùng vô số dự đoán thô giúp phần kiểm nghiệm tính điểm sinh động nhất!
         </div>
       </div>
+      )}
       
       {/* Simulation Controls Card (Bento Rounded 3xl) */}
       <div className="bg-slate-900 border border-emerald-500/20 rounded-3xl p-6 shadow-xl space-y-4">
@@ -1052,6 +1285,239 @@ export default function AdminPanel({
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* SECTION: USER VOTING HISTORY */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center pb-4 border-b border-slate-800/85 gap-3">
+          <div>
+            <h2 className="text-base font-black text-slate-100 font-display flex items-center gap-2 uppercase">
+              <History className="w-5 h-5 text-sky-400" /> Lịch sử bình chọn của các User
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Tra cứu cụ thể ngày giờ thực tế và lựa chọn dự đoán tỷ số/kết quả của từng thành viên.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input 
+              type="text"
+              placeholder="Tìm theo tên hoặc mã..."
+              value={historySearch}
+              onChange={e => setHistorySearch(e.target.value)}
+              className="bg-slate-950 border border-slate-850 text-xs font-semibold text-slate-100 rounded-xl py-2 px-3 focus:outline-none w-48"
+            />
+            <button 
+              type="button"
+              onClick={fetchPredictionsHistory} 
+              className="p-2 bg-slate-800 hover:bg-slate-705 rounded-xl text-slate-350 transition cursor-pointer"
+              title="Cập nhật danh sách mới nhất"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingHistory ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/65">
+          <div className="overflow-x-auto max-h-[350px] scrollbar-thin">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-slate-950 text-slate-400 uppercase text-[9px] tracking-wider border-b border-slate-800 sticky top-0 z-10">
+                <tr>
+                  <th className="py-3 px-4">Thời gian bình chọn (UTC)</th>
+                  <th className="py-3 px-4">Thành viên</th>
+                  <th className="py-3 px-4">Trận đấu</th>
+                  <th className="py-3 px-3 text-center">Lựa chọn</th>
+                  <th className="py-3 px-3 text-center">Cách tính điểm</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-850 text-slate-300">
+                {loadingHistory ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-slate-500 italic">Đang tải lịch sử bình chọn...</td>
+                  </tr>
+                ) : filteredHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-slate-500 italic">Không có lịch sử bình chọn nào khớp.</td>
+                  </tr>
+                ) : (
+                  filteredHistory.map((h, idx) => {
+                    const formattedDate = h.votedAt 
+                      ? new Date(h.votedAt).toLocaleString('vi-VN', { timeZone: 'UTC' }) + ' (UTC)'
+                      : '(chưa rõ thời gian)';
+                    return (
+                      <tr key={`${h.playerPhone}_${h.matchId}_${idx}`} className="hover:bg-slate-900/40 transition">
+                        <td className="py-3 px-4 font-mono text-xs text-slate-400">
+                          {formattedDate}
+                        </td>
+                        <td className="py-3 px-4 text-slate-200">
+                          <span className="font-bold">{h.playerName}</span>
+                          <span className="block font-mono text-[9px] text-slate-500">{h.playerPhone}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-medium text-slate-300">
+                            Trận #{h.matchId}: <strong className="text-slate-100">{h.homeTeam}</strong> vs <strong className="text-slate-100">{h.awayTeam}</strong>
+                          </span>
+                          <span className="block text-[9.5px] text-slate-500 mt-0.5">Trạng thái: {h.matchStatus === 'FINISHED' ? 'Đã hoàn thành' : 'Chưa hoàn thành'}</span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide ${
+                            h.prediction === 'HOME' 
+                              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/20' 
+                              : h.prediction === 'AWAY' 
+                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/20' 
+                                : 'bg-slate-850 text-slate-400 border border-slate-800'
+                          }`}>
+                            {h.prediction === 'HOME' ? 'Thắng (Home) 🟢' : h.prediction === 'AWAY' ? 'Thua (Away) 🔴' : 'Hòa (Draw) 🟡'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center font-mono">
+                          {h.evaluated ? (
+                            <span className={`text-[11px] font-bold ${h.points === 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {h.points === 0 ? 'Đoán Đúng (0đ)' : `Đoán Sai/Bỏ qua (+${h.points}đ)`}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 italic text-[11px]">Chưa tổng kết</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION: BACKUP & DATA RETRIEVAL REGION */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center pb-4 border-b border-slate-800/85 gap-3">
+          <div>
+            <h2 className="text-base font-black text-slate-100 font-display flex items-center gap-2 uppercase">
+              <Database className="w-5 h-5 text-emerald-400 animate-pulse" /> Trung tâm sao lưu & Khôi phục (Anti-Loss Engine)
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Sao lưu tự động mỗi ngày/trước reset và giải pháp tải xuống/tải lên tệp cấu bối dự phòng an toàn tuyệt đối.
+            </p>
+          </div>
+          <button 
+            type="button"
+            onClick={fetchBackupsList} 
+            className="text-xs font-bold bg-slate-850 hover:bg-slate-800 py-2 px-3.5 rounded-xl text-slate-350 transition shrink-0 cursor-pointer"
+          >
+            Nạp danh sách sao lưu 🔃
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* Column 1: Action Suite */}
+          <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
+            <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">Hành động sao lưu trực tiếp</h3>
+            
+            <div className="space-y-3">
+              <button 
+                type="button"
+                onClick={handleCreateBackup}
+                className="w-full bg-emerald-700/20 hover:bg-emerald-700/35 border border-emerald-500/25 py-3 px-4 rounded-xl text-xs font-bold text-emerald-400 transition cursor-pointer text-left flex items-center justify-between"
+              >
+                <span>Tạo sao lưu cục bộ máy chủ</span>
+                <Database className="w-4 h-4 ml-1.5" />
+              </button>
+
+              <button 
+                type="button"
+                onClick={handleExportBackupFile}
+                className="w-full bg-indigo-700/20 hover:bg-indigo-700/35 border border-indigo-500/25 py-3 px-4 rounded-xl text-xs font-bold text-indigo-400 transition cursor-pointer text-left flex items-center justify-between"
+              >
+                <span>Xuất tệp sao lưu (.json) về máy</span>
+                <Download className="w-4 h-4 ml-1.5" />
+              </button>
+
+              <div className="relative">
+                <input 
+                  type="file" 
+                  accept=".json" 
+                  id="backup-file-upload-input" 
+                  onChange={handleImportBackupFile}
+                  className="hidden" 
+                />
+                <label 
+                  htmlFor="backup-file-upload-input"
+                  className="w-full bg-amber-700/10 hover:bg-amber-700/20 border border-amber-500/25 py-3 px-4 rounded-xl text-xs font-bold text-amber-400 transition cursor-pointer flex items-center justify-between"
+                >
+                  <span>Nhập tệp (.json) để khôi phục</span>
+                  <Upload className="w-4 h-4 ml-1.5" />
+                </label>
+              </div>
+            </div>
+
+            <div className="text-[10px] text-slate-500 leading-normal font-medium bg-slate-900/60 p-3 rounded-xl border border-slate-850/60 font-sans font-medium">
+              ℹ️ <strong>Tự động lưu trữ an toàn:</strong> Toàn bộ điểm số gốc, lựa chọn outrights và các nhánh dự đoán của người dùng được tự động sao lưu định kỳ khi khởi động và trước bất kỳ thao tác reset database nào để tránh mất mát.
+            </div>
+          </div>
+
+          {/* Column 2 & 3: File back up logs on Server */}
+          <div className="md:col-span-2 bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-3">
+            <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">Danh sách bản sao lưu đã lưu trên Máy chủ</h3>
+            
+            <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-900/40 font-mono text-[11px]">
+              <div className="overflow-y-auto max-h-[220px] scrollbar-thin">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-950 text-slate-450 uppercase text-[9px] tracking-wider border-b border-slate-800">
+                    <tr>
+                      <th className="py-2.5 px-3">Tên file sao lưu</th>
+                      <th className="py-2.5 px-3 text-right">Kích cỡ</th>
+                      <th className="py-2.5 px-3 text-right">Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-850 text-slate-350">
+                    {loadingBackups ? (
+                      <tr>
+                        <td colSpan={3} className="py-8 text-center text-slate-550 italic">Đang tải danh sách bản sao lưu...</td>
+                      </tr>
+                    ) : backupsList.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="py-8 text-center text-slate-550 italic animate-pulse">Chưa có tệp sao lưu nào được lưu trữ.</td>
+                      </tr>
+                    ) : (
+                      backupsList.map(b => (
+                        <tr key={b.filename} className="hover:bg-slate-900/60 transition">
+                          <td className="py-2.5 px-3 text-slate-250 truncate max-w-xs font-sans-mono" title={b.filename}>
+                            <span className="font-bold flex items-center gap-1.5 text-slate-100 font-medium">
+                              <Database className="w-3.5 h-3.5 text-slate-500" /> {b.filename}
+                            </span>
+                            <span className="block font-sans text-[9.5px] text-slate-500 mt-0.5">Khởi tạo: {new Date(b.mtime).toLocaleString('vi-VN')}</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-slate-400">
+                            {(b.size / 1024).toFixed(1)} KB
+                          </td>
+                          <td className="py-2.5 px-3 text-right space-x-1 font-sans">
+                            <button 
+                              type="button"
+                              onClick={() => handleRestoreBackup(b.filename)}
+                              className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-[10.5px] font-black py-1 px-2.5 rounded hover:text-emerald-300 transition cursor-pointer border border-emerald-500/10"
+                            >
+                              Khôi phục
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => handleDeleteBackup(b.filename)}
+                              className="bg-rose-600/15 hover:bg-rose-600/25 text-rose-455 text-[10.5px] font-black py-1 px-2 rounded hover:text-rose-400 transition cursor-pointer"
+                              title="Xóa bản ghi này"
+                            >
+                              Xóa
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
