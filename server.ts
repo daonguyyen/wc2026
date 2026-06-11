@@ -8,10 +8,34 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
+import { Firestore } from "@google-cloud/firestore";
 import { generate104Matches } from "./src/data/worldcupMatches.js";
 import { Match, Player, Prediction } from "./src/types.js";
 
 dotenv.config();
+
+// Initialize Firestore client with custom database ID from config
+let firestore: any = null;
+try {
+  const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(firebaseConfigPath)) {
+    const config = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
+    if (config.projectId && config.firestoreDatabaseId) {
+      firestore = new Firestore({
+        projectId: config.projectId,
+        databaseId: config.firestoreDatabaseId,
+      });
+      console.log(`[Firestore] Successfully initialized with projectId: ${config.projectId}, databaseId: ${config.firestoreDatabaseId}`);
+    } else if (config.projectId) {
+      firestore = new Firestore({
+        projectId: config.projectId,
+      });
+      console.log(`[Firestore] Successfully initialized with default database on projectId: ${config.projectId}`);
+    }
+  }
+} catch (err) {
+  console.error("[Firestore] Failed to initialize Google Cloud Firestore client:", err);
+}
 
 const app = express();
 const PORT = 3000;
@@ -238,78 +262,118 @@ function createAutomaticBackup(type: string = "auto") {
 }
 
 // Seed / Load database
-function loadDB() {
+async function loadDB() {
   try {
-    if (fs.existsSync(DB_PATH)) {
-      const data = fs.readFileSync(DB_PATH, "utf-8");
-      db = JSON.parse(data);
-      if (!db.adminCustomizedVisibility) {
-        db.adminCustomizedVisibility = {};
-      }
-      const adminCustoms = db.adminCustomizedVisibility;
+    let loadedFromFirestore = false;
 
-      // Fallback matching
-      if (!db.matches || db.matches.length === 0) {
+    // Check if we have credentials to use Google Cloud Firestore
+    const hasCredentials = !!process.env.GOOGLE_APPLICATION_CREDENTIALS || !!process.env.K_SERVICE;
+
+    if (firestore) {
+      if (hasCredentials) {
+        try {
+          console.log("[Firestore] Loading database from Firestore app_state collections...");
+          const colRef = firestore.collection("app_state");
+
+          const docPlayers = await colRef.doc("players").get();
+          const docPredictions = await colRef.doc("predictions").get();
+          const docMatches = await colRef.doc("matches").get();
+          const docOutrights = await colRef.doc("outrights").get();
+          const docSettings = await colRef.doc("settings").get();
+
+          if (docPlayers.exists || docPredictions.exists || docMatches.exists) {
+            db.players = docPlayers.exists ? docPlayers.data()?.data || {} : {};
+            db.predictions = docPredictions.exists ? docPredictions.data()?.data || {} : {};
+            db.matches = docMatches.exists ? docMatches.data()?.data || [] : [];
+
+            const outrightsData = docOutrights.exists ? docOutrights.data() : null;
+            db.outrightPredictions = outrightsData?.outrightPredictions || {};
+            db.outrightResults = outrightsData?.outrightResults || { champion: "", goldenBoot: "", goldenGlove: "", goldenBall: "" };
+            db.outrightEvaluations = outrightsData?.outrightEvaluations || {};
+
+            const settingsData = docSettings.exists ? docSettings.data() : null;
+            db.adminCustomizedVisibility = settingsData?.adminCustomizedVisibility || {};
+            db.simulatedTime = settingsData?.simulatedTime || null;
+
+            loadedFromFirestore = true;
+            console.log("[Firestore] Successfully loaded database state from Google Cloud Firestore!");
+          } else {
+            console.log("[Firestore] Database app_state collection is empty. Will seed and initialize.");
+          }
+        } catch (firestoreErr: any) {
+          console.warn("\n[Firestore Warning] Không thể kết nối hoặc tải dữ liệu từ Google Cloud Firestore:", firestoreErr.message || firestoreErr);
+          console.warn("[Firestore Warning] Rất có thể bạn đang chạy trên Localhost mà chưa xác thực thành công.");
+          console.warn("[Firestore Warning] Hệ thống sẽ chuyển sang chế độ lưu trữ Local File (data/db.json) làm dự phòng.");
+          firestore = null; // Disable Firestore to use local fallback
+        }
+      } else {
+        console.log("\n[Local Environment] Phát hiện bạn đang chạy ứng dụng tại Localhost và chưa thiết lập biến môi trường GOOGLE_APPLICATION_CREDENTIALS hoặc quyền truy cập cloud.");
+        console.log("[Local Environment] Tự động chuyển sang sử dụng cơ sở dữ liệu dạng tệp tin Local File (data/db.json) để chạy offline an toàn.");
+        firestore = null; // Disable Firestore, fall back to local file
+      }
+    }
+
+    if (!loadedFromFirestore) {
+      console.log("[Firestore] Falling back to local file-based storage path:", DB_PATH);
+      if (fs.existsSync(DB_PATH)) {
+        const data = fs.readFileSync(DB_PATH, "utf-8");
+        db = JSON.parse(data);
+      }
+    }
+
+    if (!db.adminCustomizedVisibility) {
+      db.adminCustomizedVisibility = {};
+    }
+    const adminCustoms = db.adminCustomizedVisibility;
+
+    // Fallback matching
+    if (!db.matches || db.matches.length === 0) {
+      db.matches = generate104Matches().map((m) => {
+        const isFinished = m.status === "FINISHED";
+        const customized = adminCustoms[m.id];
+        return { ...m, visible: customized !== undefined ? customized : isFinished };
+      });
+    } else {
+      // Migration: Detect old matches data (awayTeam is not Nam Phi for match 1)
+      const firstMatch = db.matches.find((m) => m.id === "1");
+      if (firstMatch && firstMatch.awayTeam !== "Nam Phi") {
+        console.log("Phát hiện dữ liệu trận đấu cũ, tự động di cư sang World Cup 2026 chuẩn...");
         db.matches = generate104Matches().map((m) => {
           const isFinished = m.status === "FINISHED";
           const customized = adminCustoms[m.id];
           return { ...m, visible: customized !== undefined ? customized : isFinished };
         });
+        db.predictions = {}; // Clean old predictions since teams have changed
       } else {
-        // Migration: Detect old matches data (awayTeam is not Nam Phi for match 1)
-        const firstMatch = db.matches.find((m) => m.id === "1");
-        if (firstMatch && firstMatch.awayTeam !== "Nam Phi") {
-          console.log("Phát hiện dữ liệu trận đấu cũ, tự động di cư sang World Cup 2026 chuẩn...");
-          db.matches = generate104Matches().map((m) => {
-            const isFinished = m.status === "FINISHED";
-            const customized = adminCustoms[m.id];
-            return { ...m, visible: customized !== undefined ? customized : isFinished };
-          });
-          db.predictions = {}; // Clean old predictions since teams have changed
-        } else {
-          // Reconcile/align database match times, team names & stages with generate104Matches() to apply accurate translations and scheduling
-          const sourceMatches = generate104Matches();
-          db.matches = db.matches.map((m) => {
-            const src = sourceMatches.find((s) => s.id === m.id);
-            if (!src) return m;
-            const isFinished = m.status === "FINISHED" || src.status === "FINISHED";
-            const customized = adminCustoms[m.id];
-            return {
-              ...m,
-              homeTeam: src.homeTeam,
-              awayTeam: src.awayTeam,
-              matchTime: src.matchTime,
-              stage: src.stage,
-              visible: customized !== undefined ? customized : isFinished,
-            };
-          });
-        }
+        // Reconcile/align database match times, team names & stages with generate104Matches() to apply accurate translations and scheduling
+        const sourceMatches = generate104Matches();
+        db.matches = db.matches.map((m) => {
+          const src = sourceMatches.find((s) => s.id === m.id);
+          if (!src) return m;
+          const isFinished = m.status === "FINISHED" || src.status === "FINISHED";
+          const customized = adminCustoms[m.id];
+          return {
+            ...m,
+            homeTeam: src.homeTeam,
+            awayTeam: src.awayTeam,
+            matchTime: src.matchTime,
+            stage: src.stage,
+            visible: customized !== undefined ? customized : isFinished,
+          };
+        });
       }
-      if (!db.outrightPredictions) db.outrightPredictions = {};
-      if (!db.outrightResults) db.outrightResults = { champion: "", goldenBoot: "", goldenGlove: "", goldenBall: "" };
-      if (!db.outrightEvaluations) db.outrightEvaluations = {};
-
-      seedDefaultPlayers();
-      recalculateAllScores();
-      saveDB();
-
-      // Perform automated pre-startup backup
-      createAutomaticBackup("startup");
-    } else {
-      db = {
-        players: {},
-        predictions: {},
-        matches: generate104Matches().map((m) => ({ ...m, visible: m.status === "FINISHED" })),
-        simulatedTime: null,
-        outrightPredictions: {},
-        outrightResults: { champion: "", goldenBoot: "", goldenGlove: "", goldenBall: "" },
-        outrightEvaluations: {},
-        adminCustomizedVisibility: {},
-      };
-      seedDefaultPlayers();
-      recalculateAllScores();
-      saveDB();
     }
+
+    if (!db.outrightPredictions) db.outrightPredictions = {};
+    if (!db.outrightResults) db.outrightResults = { champion: "", goldenBoot: "", goldenGlove: "", goldenBall: "" };
+    if (!db.outrightEvaluations) db.outrightEvaluations = {};
+
+    seedDefaultPlayers();
+    recalculateAllScores();
+    await saveDB();
+
+    // Perform automated pre-startup backup
+    createAutomaticBackup("startup");
   } catch (error) {
     console.error("Lỗi khi tải cơ sở dữ liệu, khởi tạo lại:", error);
     db = {
@@ -320,17 +384,47 @@ function loadDB() {
       outrightPredictions: {},
       outrightResults: { champion: "", goldenBoot: "", goldenGlove: "", goldenBall: "" },
       outrightEvaluations: {},
+      adminCustomizedVisibility: {},
     };
     seedDefaultPlayers();
     recalculateAllScores();
+    await saveDB();
   }
 }
 
-function saveDB() {
+async function saveDB() {
+  try {
+    if (firestore) {
+      const colRef = firestore.collection("app_state");
+      await Promise.all([
+        colRef.doc("players").set({ data: db.players }, { merge: false }),
+        colRef.doc("predictions").set({ data: db.predictions }, { merge: false }),
+        colRef.doc("matches").set({ data: db.matches }, { merge: false }),
+        colRef.doc("outrights").set(
+          {
+            outrightPredictions: db.outrightPredictions || {},
+            outrightResults: db.outrightResults || { champion: "", goldenBoot: "", goldenGlove: "", goldenBall: "" },
+            outrightEvaluations: db.outrightEvaluations || {},
+          },
+          { merge: false },
+        ),
+        colRef.doc("settings").set(
+          {
+            adminCustomizedVisibility: db.adminCustomizedVisibility || {},
+            simulatedTime: db.simulatedTime,
+          },
+          { merge: false },
+        ),
+      ]);
+    }
+  } catch (error) {
+    console.error("Lỗi khi lưu Firestore:", error);
+  }
+
   try {
     fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf-8");
   } catch (error) {
-    console.error("Lỗi khi lưu cơ sở dữ liệu:", error);
+    console.error("Lỗi khi lưu cơ sở dữ liệu tệp tin:", error);
   }
 }
 
@@ -408,8 +502,6 @@ function recalculateAllScores() {
 
   saveDB();
 }
-
-loadDB();
 
 // Middlewares
 app.use(express.json());
@@ -1321,26 +1413,34 @@ app.post("/api/admin/backups/import-direct", (req, res) => {
 });
 
 // Serve Vite or static builds
-const isProd = process.env.NODE_ENV === "production";
-if (!isProd) {
-  createViteServer({
-    server: { middlewareMode: true },
-    appType: "spa",
-  }).then((vite) => {
+async function startServer() {
+  console.log("[Startup] Loading up database partitions...");
+  await loadDB();
+
+  const isProd = process.env.NODE_ENV === "production";
+  if (!isProd) {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
     app.use(vite.middlewares);
 
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Development Server running on http://localhost:${PORT}`);
     });
-  });
-} else {
-  const distPath = path.join(process.cwd(), "dist");
-  app.use(express.static(distPath));
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
-  });
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Production Server running on http://localhost:${PORT}`);
-  });
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Production Server running on http://localhost:${PORT}`);
+    });
+  }
 }
+
+startServer().catch((err) => {
+  console.error("Fail to start server:", err);
+});
