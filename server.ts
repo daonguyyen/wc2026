@@ -57,6 +57,14 @@ try {
   console.error('[Firestore] Failed to initialize Google Cloud Firestore client:', err);
 }
 
+// Helper to convert Date to GMT+7 ISO string format for persistent JSON storage
+function toGMT7String(date: Date): string {
+  const tzOffset = 7 * 60 * 60 * 1000; // 7 hours in milliseconds
+  const localTime = date.getTime() + tzOffset;
+  const localDate = new Date(localTime);
+  return localDate.toISOString().replace('Z', '+07:00');
+}
+
 const app = express();
 // Support dynamic port allocation on hosting platforms like Render (using process.env.PORT).
 // In Google AI Studio, we bind strictly to port 3000 using process.env.K_SERVICE indicator.
@@ -248,7 +256,7 @@ function seedDefaultPlayers() {
         phoneNumber: dp.code,
         name: dp.name,
         score: 0,
-        createdAt: new Date('2026-06-08T00:00:00Z').toISOString(),
+        createdAt: toGMT7String(new Date('2026-06-08T00:00:00Z')),
       };
     }
   }
@@ -256,7 +264,7 @@ function seedDefaultPlayers() {
 
 function createAutomaticBackup(type: string = 'auto') {
   try {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const timestamp = toGMT7String(new Date()).replace(/[:.]/g, '-');
     const filename = `${type}_backup_${timestamp}.json`;
     const backupFilePath = path.join(BACKUPS_DIR, filename);
     
@@ -267,7 +275,7 @@ function createAutomaticBackup(type: string = 'auto') {
       outrightResults: db.outrightResults || { champion: '', goldenBoot: '', goldenGlove: '', goldenBall: '' },
       outrightEvaluations: db.outrightEvaluations || {},
       adminCustomizedVisibility: db.adminCustomizedVisibility || {},
-      timestamp: new Date().toISOString()
+      timestamp: toGMT7String(new Date())
     };
     
     fs.writeFileSync(backupFilePath, JSON.stringify(backupData, null, 2), 'utf-8');
@@ -526,7 +534,7 @@ function getCurrentTime(): Date {
 // 1. Get current server state & simulated clock
 app.get('/api/server-info', (req, res) => {
   res.json({
-    currentTime: getCurrentTime().toISOString(),
+    currentTime: toGMT7String(getCurrentTime()),
     isSimulating: db.simulatedTime !== null,
     simulatedTime: db.simulatedTime,
   });
@@ -545,12 +553,12 @@ app.post('/api/admin/time', (req, res) => {
     if (isNaN(d.getTime())) {
       return res.status(400).json({ error: 'Định dạng thời gian không hợp lệ' });
     }
-    db.simulatedTime = d.toISOString();
+    db.simulatedTime = toGMT7String(d);
   }
   saveDB();
   res.json({
     message: 'Cập nhật thời gian mô phỏng thành công',
-    currentTime: getCurrentTime().toISOString(),
+    currentTime: toGMT7String(getCurrentTime()),
     isSimulating: db.simulatedTime !== null,
   });
 });
@@ -733,7 +741,7 @@ app.post('/api/players/login', (req, res) => {
       phoneNumber: loginCode, // mapped to unique store field
       name: cleanName,
       score: 0,
-      createdAt: getCurrentTime().toISOString(),
+      createdAt: toGMT7String(getCurrentTime()),
     };
 
     db.players[loginCode] = newPlayer;
@@ -813,7 +821,7 @@ app.post('/api/predictions', (req, res) => {
     playerPhone: normalizedPhone,
     matchId: String(matchId),
     prediction,
-    votedAt: now.toISOString(),
+    votedAt: toGMT7String(now),
     points: 0,
     evaluated: false,
   };
@@ -869,7 +877,7 @@ app.post('/api/outright-predictions', (req, res) => {
     goldenBoot: String(goldenBoot || '').trim(),
     goldenGlove: String(goldenGlove || '').trim(),
     goldenBall: String(goldenBall || '').trim(),
-    updatedAt: now.toISOString()
+    updatedAt: toGMT7String(now)
   };
 
   recalculateAllScores();
@@ -1037,7 +1045,7 @@ app.get('/api/odds', async (req, res) => {
       homeOdds,
       drawOdds,
       awayOdds,
-      lastUpdated: getCurrentTime().toISOString(),
+      lastUpdated: toGMT7String(getCurrentTime()),
     };
   });
 
@@ -1058,7 +1066,7 @@ app.post('/api/admin/generate-demo', (req, res) => {
       phoneNumber: phones[i],
       name: names[i],
       score: 0,
-      createdAt: new Date('2026-06-08T00:00:00Z').toISOString(),
+      createdAt: toGMT7String(new Date('2026-06-08T00:00:00Z')),
     };
   }
 
@@ -1108,7 +1116,7 @@ app.post('/api/admin/generate-demo', (req, res) => {
         playerPhone: phone,
         matchId: match.id,
         prediction: randomPred,
-        votedAt: votedTime.toISOString(),
+        votedAt: toGMT7String(votedTime),
         points,
         evaluated,
       };
@@ -1143,7 +1151,7 @@ app.post('/api/admin/generate-demo', (req, res) => {
       goldenBoot: choiceBoot,
       goldenGlove: choiceGlove,
       goldenBall: choiceBall,
-      updatedAt: new Date('2026-06-12T12:00:00Z').toISOString()
+      updatedAt: toGMT7String(new Date('2026-06-12T12:00:00Z'))
     };
   });
 
@@ -1262,7 +1270,7 @@ app.get('/api/admin/export-all', (req, res) => {
     outrightResults: db.outrightResults || { champion: '', goldenBoot: '', goldenGlove: '', goldenBall: '' },
     outrightEvaluations: db.outrightEvaluations || {},
     adminCustomizedVisibility: db.adminCustomizedVisibility || {},
-    timestamp: new Date().toISOString()
+    timestamp: toGMT7String(new Date())
   });
 });
 
@@ -1273,7 +1281,7 @@ app.post('/api/admin/backups/create', (req, res) => {
   }
   
   try {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const timestamp = toGMT7String(new Date()).replace(/[:.]/g, '-');
     const filename = `manual_backup_${timestamp}.json`;
     const backupFilePath = path.join(BACKUPS_DIR, filename);
     
@@ -1284,7 +1292,7 @@ app.post('/api/admin/backups/create', (req, res) => {
       outrightResults: db.outrightResults || { champion: '', goldenBoot: '', goldenGlove: '', goldenBall: '' },
       outrightEvaluations: db.outrightEvaluations || {},
       adminCustomizedVisibility: db.adminCustomizedVisibility || {},
-      timestamp: new Date().toISOString()
+      timestamp: toGMT7String(new Date())
     };
     
     fs.writeFileSync(backupFilePath, JSON.stringify(backupData, null, 2), 'utf-8');
@@ -1313,7 +1321,7 @@ app.get('/api/admin/backups/list', (req, res) => {
         return {
           filename: f,
           size: stats.size,
-          mtime: stats.mtime.toISOString()
+          mtime: toGMT7String(stats.mtime)
         };
       })
       .sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime()); // Newest first
