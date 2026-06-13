@@ -205,6 +205,9 @@ export default function MatchList({
     return true;
   });
 
+  const upcomingLiveMatches = filteredMatches.filter((m) => m.status !== 'FINISHED');
+  const completedMatches = filteredMatches.filter((m) => m.status === 'FINISHED');
+
   // Calculate timing status of a match
   const getMatchTimeStatus = (m: Match) => {
     const matchTime = new Date(m.matchTime);
@@ -353,216 +356,329 @@ export default function MatchList({
       </div>
 
       {/* Matches Grid (Bento cards layout) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {filteredMatches.length === 0 ? (
-          <div className="md:col-span-2 py-12 text-center text-slate-500 text-xs font-bold border border-slate-850 bg-slate-950 rounded-3xl uppercase tracking-wider">
-            Không tìm thấy trận đấu nào thỏa mãn bộ lọc hiển thị.
-          </div>
-        ) : (
-          filteredMatches.map((m) => {
-            const timeStatus = getMatchTimeStatus(m);
-            const mTime = new Date(m.matchTime);
-            
-            const predKey = playerPhone ? `${playerPhone}_${m.id}` : '';
-            const userPred = playerPhone ? predictions[predKey] : null;
-            const matchOdds = odds[m.id];
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <Clock className="w-5 h-5 text-amber-400 font-black animate-pulse" />
+          <h3 className="text-sm font-black text-slate-100 uppercase tracking-wider">
+            Trận đấu sắp diễn ra & Đang trực tiếp ({upcomingLiveMatches.length})
+          </h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {upcomingLiveMatches.length === 0 ? (
+            <div className="md:col-span-2 py-12 text-center text-slate-500 text-xs font-bold border border-slate-850 bg-slate-950 rounded-3xl uppercase tracking-wider">
+              Không tìm thấy trận đấu sắp diễn ra hoặc đang trực tiếp nào.
+            </div>
+          ) : (
+            upcomingLiveMatches.map((m) => {
+              const timeStatus = getMatchTimeStatus(m);
+              const mTime = new Date(m.matchTime);
+              
+              const predKey = playerPhone ? `${playerPhone}_${m.id}` : '';
+              const userPred = playerPhone ? predictions[predKey] : null;
+              const matchOdds = odds[m.id];
 
-            const isLockedOrFinished = timeStatus.value === 'LOCKED' || timeStatus.value === 'FINISHED';
+              const isLockedOrFinished = timeStatus.value === 'LOCKED' || timeStatus.value === 'FINISHED';
 
-            return (
-              <div
-                key={m.id}
-                id={`match-card-${m.id}`}
-                className={`bg-slate-900 border ${userPred ? 'border-emerald-500/25 shadow-[0_4px_24px_rgba(16,185,129,0.03)]' : 'border-slate-800'} hover:border-slate-700/80 rounded-3xl p-6 shadow-sm transition-all duration-300 hover:translate-y-[-1px] flex flex-col justify-between space-y-5`}
-              >
-                
-                {/* Meta details */}
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5 flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-950 px-2 py-0.5 rounded border border-slate-850">
-                      Trận {m.id}
-                    </span>
-                    {m.visible === false && (
-                      <span className="bg-rose-500/15 text-rose-400 text-[8.5px] font-black uppercase px-2 py-0.5 rounded border border-rose-500/25">
-                        Đang Ẩn 👁️‍🗨️
+              return (
+                <div
+                  key={m.id}
+                  id={`match-card-${m.id}`}
+                  className={`bg-slate-900 border ${userPred ? 'border-emerald-500/25 shadow-[0_4px_24px_rgba(16,185,129,0.03)]' : 'border-slate-800'} hover:border-slate-700/80 rounded-3xl p-6 shadow-sm transition-all duration-300 hover:translate-y-[-1px] flex flex-col justify-between space-y-5`}
+                >
+                  
+                  {/* Meta details */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-950 px-2 py-0.5 rounded border border-slate-850">
+                        Trận {m.id}
                       </span>
-                    )}
-                    <span className="text-[11px] font-semibold text-emerald-400">
-                      {m.stage}
-                    </span>
-                  </div>
-                  
-                  {/* Lock badge status */}
-                  <div className={`inline-flex items-center text-[10px] font-bold uppercase py-0.5 px-2 rounded-full border ${timeStatus.style}`}>
-                    {timeStatus.icon}
-                    <span>{timeStatus.label}</span>
-                  </div>
-                </div>
-
-                {/* Team Vs Grid (Bento style) */}
-                <div className="grid grid-cols-3 items-center justify-center py-2.5 relative">
-                  
-                  {/* Home Team */}
-                  <div className="text-center space-y-2 flex flex-col items-center">
-                    <div className="w-14 h-14 bg-slate-950 rounded-2xl flex items-center justify-center text-3xl shadow-inner border border-slate-800/80 group-hover:border-slate-700/50 transition duration-305 select-none animate-fade-in">
-                      {getTeamFlag(m.homeTeam)}
-                    </div>
-                    <div className="text-xs font-bold text-slate-100 truncate w-full px-1">{m.homeTeam}</div>
-                  </div>
-
-                  {/* Middle Versus / Score */}
-                  <div className="text-center flex flex-col items-center justify-center space-y-1.5">
-                    {m.status === 'FINISHED' ? (
-                      <div className="bg-slate-950 rounded-xl px-3.5 py-1.5 border border-slate-800 text-center scale-105 shadow-inner">
-                        <span className="text-lg font-mono font-black text-emerald-400">{m.homeScore}</span>
-                        <span className="text-slate-600 px-1 font-bold">-</span>
-                        <span className="text-lg font-mono font-black text-emerald-400">{m.awayScore}</span>
-                      </div>
-                    ) : (
-                      <div className="text-xl font-black text-slate-700 font-display select-none">
-                        VS
-                      </div>
-                    )}
-                    
-                    <div className="text-[10px] font-mono text-slate-500 font-bold flex items-center space-x-1 bg-slate-950 px-2 py-0.5 rounded border border-slate-850/40">
-                      <Calendar className="w-3 h-3 text-slate-500 shrink-0" />
-                      <span>{mTime.toLocaleString('vi-VN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-
-                    <div className="text-[9px] text-amber-400 font-bold flex items-center space-x-1.5 bg-amber-500/10 px-2.5 py-1 rounded border border-amber-500/20 select-none shadow whitespace-nowrap">
-                      <span>⚽</span>
-                      <span>{getHandicapText(m.homeTeam, m.awayTeam)}</span>
-                    </div>
-                  </div>
-
-                  {/* Away Team */}
-                  <div className="text-center space-y-2 flex flex-col items-center">
-                    <div className="w-14 h-14 bg-slate-950 rounded-2xl flex items-center justify-center text-3xl shadow-inner border border-slate-800/80 group-hover:border-slate-700/50 transition duration-305 select-none animate-fade-in">
-                      {getTeamFlag(m.awayTeam)}
-                    </div>
-                    <div className="text-xs font-bold text-slate-100 truncate w-full px-1">{m.awayTeam}</div>
-                  </div>
-                  
-                </div>
-
-                {/* Voter Buttons Grid (Bento style) */}
-                <div className="space-y-3">
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    {isLockedOrFinished ? 'Kết quả bình chọn' : 'Chọn dự đoán nhận điểm'}
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2.5">
-                    
-                    {/* Home Team Win Button */}
-                    <button
-                      type="button"
-                      disabled={isLockedOrFinished || !playerPhone}
-                      onClick={() => onVote(m.id, 'HOME')}
-                      className={`relative text-xs py-3 px-2 rounded-xl border font-bold flex flex-col items-center justify-center transition-all duration-200 ${
-                        userPred?.prediction === 'HOME'
-                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-355 font-extrabold shadow-[0_2px_12px_rgba(16,185,129,0.1)]'
-                          : isLockedOrFinished
-                          ? 'bg-slate-950/20 border-slate-900/40 text-slate-600 cursor-not-allowed'
-                          : 'bg-slate-950 hover:bg-slate-850 border-slate-800 text-slate-355 hover:border-slate-700'
-                      }`}
-                    >
-                      <span className="truncate w-full text-center">{m.homeTeam}</span>
-                      <span className="text-[9px] text-slate-500 mt-0.5 font-mono">Odds {matchOdds?.homeOdds ? `${matchOdds.homeOdds}` : '1.80'}</span>
-                    </button>
-
-                    {/* Draw Button */}
-                    <button
-                      type="button"
-                      disabled={isLockedOrFinished || !playerPhone}
-                      onClick={() => onVote(m.id, 'DRAW')}
-                      className={`relative text-xs py-3 px-2 rounded-xl border font-bold flex flex-col items-center justify-center transition-all duration-200 ${
-                        userPred?.prediction === 'DRAW'
-                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-355 font-extrabold shadow-[0_2px_12px_rgba(16,185,129,0.1)]'
-                          : isLockedOrFinished
-                          ? 'bg-slate-950/20 border-slate-900/40 text-slate-600 cursor-not-allowed'
-                          : 'bg-slate-950 hover:bg-slate-850 border-slate-800 text-slate-355 hover:border-slate-700'
-                      }`}
-                    >
-                      <span>Hòa</span>
-                      <span className="text-[9px] text-slate-500 mt-0.5 font-mono font-medium">Odds {matchOdds?.drawOdds ? `${matchOdds.drawOdds}` : '3.20'}</span>
-                    </button>
-
-                    {/* Away Team Win Button */}
-                    <button
-                      type="button"
-                      disabled={isLockedOrFinished || !playerPhone}
-                      onClick={() => onVote(m.id, 'AWAY')}
-                      className={`relative text-xs py-3 px-2 rounded-xl border font-bold flex flex-col items-center justify-center transition-all duration-200 ${
-                        userPred?.prediction === 'AWAY'
-                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-355 font-extrabold shadow-[0_2px_12px_rgba(16,185,129,0.1)]'
-                          : isLockedOrFinished
-                          ? 'bg-slate-950/20 border-slate-900/40 text-slate-600 cursor-not-allowed'
-                          : 'bg-slate-950 hover:bg-slate-850 border-slate-800 text-slate-355 hover:border-slate-700'
-                      }`}
-                    >
-                      <span className="truncate w-full text-center">{m.awayTeam}</span>
-                      <span className="text-[9px] text-slate-500 mt-0.5 font-mono font-medium">Odds {matchOdds?.awayOdds ? `${matchOdds.awayOdds}` : '2.40'}</span>
-                    </button>
-
-                  </div>
-
-                  {/* Auth / Result state callouts */}
-                  {!playerPhone ? (
-                    <button
-                      onClick={onOpenLogin}
-                      className="w-full text-center text-[10px] font-bold text-amber-400 bg-amber-500/5 hover:bg-amber-500/10 py-2.5 rounded-xl border border-amber-500/10 hover:border-amber-500/25 transition cursor-pointer uppercase tracking-wider font-display"
-                    >
-                      🔒 Đăng nhập để bình chọn bằng mã 6 số
-                    </button>
-                  ) : userPred ? (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] px-3.5 bg-slate-950/70 py-2.5 rounded-xl border border-slate-850/60 gap-2">
-                      <span className="text-slate-400 font-medium">
-                        Đã chọn:{' '}
-                        <span className="text-slate-200 font-bold ml-1 uppercase tracking-wide bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                          {userPred.prediction === 'HOME'
-                            ? m.homeTeam
-                            : userPred.prediction === 'AWAY'
-                            ? m.awayTeam
-                            : 'Hòa'}
-                        </span>
-                      </span>
-                      {m.status === 'FINISHED' ? (
-                        userPred.points > 0 ? (
-                          <div className="flex items-center text-emerald-400 font-bold bg-emerald-500/10 px-2 rounded-full border border-emerald-500/15 text-[10px] uppercase tracking-wider">
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                            <span>+1 Điểm (Đoán Đúng)</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center text-red-555 font-bold bg-red-500/5 px-2 rounded-full border border-red-500/15 text-[10px] uppercase tracking-wider">
-                            <XCircle className="w-3.5 h-3.5 mr-1 text-red-400" />
-                            <span>0 Điểm (Đoán Sai)</span>
-                          </div>
-                        )
-                      ) : (
-                        <span className="text-[10px] text-slate-500 font-mono font-bold uppercase tracking-wider">
-                          Đã lưu tại: {new Date(userPred.votedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      {m.visible === false && (
+                        <span className="bg-rose-500/15 text-rose-400 text-[8.5px] font-black uppercase px-2 py-0.5 rounded border border-rose-500/25">
+                          Đang Ẩn 👁️‍🗨️
                         </span>
                       )}
+                      <span className="text-[11px] font-semibold text-emerald-400">
+                        {m.stage}
+                      </span>
                     </div>
-                  ) : m.status === 'FINISHED' ? (
-                    <div className="text-[10.5px] italic text-rose-455 bg-rose-950/10 p-2.5 rounded-xl border border-rose-950/20 text-center font-medium">
-                      Bạn không tham gia dự đoán trận đấu này (0 điểm)
+                    
+                    {/* Lock badge status */}
+                    <div className={`inline-flex items-center text-[10px] font-bold uppercase py-0.5 px-2 rounded-full border ${timeStatus.style}`}>
+                      {timeStatus.icon}
+                      <span>{timeStatus.label}</span>
                     </div>
-                  ) : isLockedOrFinished ? (
-                    <div className="text-[10.5px] bg-slate-950/60 border border-slate-900/40 p-2.5 rounded-xl text-center text-rose-455 font-bold uppercase tracking-wider">
-                      ❌ Bị bỏ lỡ! Đã khóa và không bình chọn kịp (0 điểm)
+                  </div>
+
+                  {/* Team Vs Grid (Bento style) */}
+                  <div className="grid grid-cols-3 items-center justify-center py-2.5 relative">
+                    
+                    {/* Home Team */}
+                    <div className="text-center space-y-2 flex flex-col items-center">
+                      <div className="w-14 h-14 bg-slate-950 rounded-2xl flex items-center justify-center text-3xl shadow-inner border border-slate-800/80 group-hover:border-slate-700/50 transition duration-305 select-none animate-fade-in">
+                        {getTeamFlag(m.homeTeam)}
+                      </div>
+                      <div className="text-xs font-bold text-slate-100 truncate w-full px-1">{m.homeTeam}</div>
                     </div>
-                  ) : (
-                    <div className="text-center text-[10.5px] text-slate-505 font-medium">
-                      ⚡ Bạn chưa chọn dự đoán cho cặp trận này. Đừng để lỡ!
+
+                    {/* Middle Versus / Score */}
+                    <div className="text-center flex flex-col items-center justify-center space-y-1.5">
+                      {m.status === 'FINISHED' ? (
+                        <div className="bg-slate-950 rounded-xl px-3.5 py-1.5 border border-slate-800 text-center scale-105 shadow-inner">
+                          <span className="text-lg font-mono font-black text-emerald-400">{m.homeScore}</span>
+                          <span className="text-slate-600 px-1 font-bold">-</span>
+                          <span className="text-lg font-mono font-black text-emerald-400">{m.awayScore}</span>
+                        </div>
+                      ) : (
+                        <div className="text-xl font-black text-slate-700 font-display select-none">
+                          VS
+                        </div>
+                      )}
+                      
+                      <div className="text-[10px] font-mono text-slate-500 font-bold flex items-center space-x-1 bg-slate-950 px-2 py-0.5 rounded border border-slate-850/40">
+                        <Calendar className="w-3 h-3 text-slate-500 shrink-0" />
+                        <span>{mTime.toLocaleString('vi-VN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+
+                      <div className="text-[9px] text-amber-400 font-bold flex items-center space-x-1.5 bg-amber-500/10 px-2.5 py-1 rounded border border-amber-500/20 select-none shadow whitespace-nowrap">
+                        <span>⚽</span>
+                        <span>{getHandicapText(m.homeTeam, m.awayTeam)}</span>
+                      </div>
                     </div>
-                  )}
+
+                    {/* Away Team */}
+                    <div className="text-center space-y-2 flex flex-col items-center">
+                      <div className="w-14 h-14 bg-slate-950 rounded-2xl flex items-center justify-center text-3xl shadow-inner border border-slate-800/80 group-hover:border-slate-700/50 transition duration-305 select-none animate-fade-in">
+                        {getTeamFlag(m.awayTeam)}
+                      </div>
+                      <div className="text-xs font-bold text-slate-100 truncate w-full px-1">{m.awayTeam}</div>
+                    </div>
+                    
+                  </div>
+
+                  {/* Voter Buttons Grid (Bento style) */}
+                  <div className="space-y-3">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      {isLockedOrFinished ? 'Kết quả bình chọn' : 'Chọn dự đoán nhận điểm'}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2.5">
+                      
+                      {/* Home Team Win Button */}
+                      <button
+                        type="button"
+                        disabled={isLockedOrFinished || !playerPhone}
+                        onClick={() => onVote(m.id, 'HOME')}
+                        className={`relative text-xs py-3 px-2 rounded-xl border font-bold flex flex-col items-center justify-center transition-all duration-200 ${
+                          userPred?.prediction === 'HOME'
+                            ? 'bg-emerald-500/10 border-emerald-500 text-emerald-355 font-extrabold shadow-[0_2px_12px_rgba(16,185,129,0.1)]'
+                            : isLockedOrFinished
+                            ? 'bg-slate-950/20 border-slate-900/40 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-950 hover:bg-slate-850 border-slate-800 text-slate-355 hover:border-slate-700'
+                        }`}
+                      >
+                        <span className="truncate w-full text-center">{m.homeTeam}</span>
+                        <span className="text-[9px] text-slate-500 mt-0.5 font-mono">Odds {matchOdds?.homeOdds ? `${matchOdds.homeOdds}` : '1.80'}</span>
+                      </button>
+
+                      {/* Draw Button */}
+                      <button
+                        type="button"
+                        disabled={isLockedOrFinished || !playerPhone}
+                        onClick={() => onVote(m.id, 'DRAW')}
+                        className={`relative text-xs py-3 px-2 rounded-xl border font-bold flex flex-col items-center justify-center transition-all duration-200 ${
+                          userPred?.prediction === 'DRAW'
+                            ? 'bg-emerald-500/10 border-emerald-500 text-emerald-355 font-extrabold shadow-[0_2px_12px_rgba(16,185,129,0.1)]'
+                            : isLockedOrFinished
+                            ? 'bg-slate-950/20 border-slate-900/40 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-950 hover:bg-slate-850 border-slate-800 text-slate-355 hover:border-slate-700'
+                        }`}
+                      >
+                        <span>Hòa</span>
+                        <span className="text-[9px] text-slate-500 mt-0.5 font-mono font-medium">Odds {matchOdds?.drawOdds ? `${matchOdds.drawOdds}` : '3.20'}</span>
+                      </button>
+
+                      {/* Away Team Win Button */}
+                      <button
+                        type="button"
+                        disabled={isLockedOrFinished || !playerPhone}
+                        onClick={() => onVote(m.id, 'AWAY')}
+                        className={`relative text-xs py-3 px-2 rounded-xl border font-bold flex flex-col items-center justify-center transition-all duration-200 ${
+                          userPred?.prediction === 'AWAY'
+                            ? 'bg-emerald-500/10 border-emerald-500 text-emerald-355 font-extrabold shadow-[0_2px_12px_rgba(16,185,129,0.1)]'
+                            : isLockedOrFinished
+                            ? 'bg-slate-950/20 border-slate-900/40 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-950 hover:bg-slate-850 border-slate-800 text-slate-355 hover:border-slate-700'
+                        }`}
+                      >
+                        <span className="truncate w-full text-center">{m.awayTeam}</span>
+                        <span className="text-[9px] text-slate-500 mt-0.5 font-mono font-medium">Odds {matchOdds?.awayOdds ? `${matchOdds.awayOdds}` : '2.40'}</span>
+                      </button>
+
+                    </div>
+
+                    {/* Auth / Result state callouts */}
+                    {!playerPhone ? (
+                      <button
+                        onClick={onOpenLogin}
+                        className="w-full text-center text-[10px] font-bold text-amber-400 bg-amber-500/5 hover:bg-amber-500/10 py-2.5 rounded-xl border border-amber-500/10 hover:border-amber-500/25 transition cursor-pointer uppercase tracking-wider font-display"
+                      >
+                        🔒 Đăng nhập để bình chọn bằng mã 6 số
+                      </button>
+                    ) : userPred ? (
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] px-3.5 bg-slate-950/70 py-2.5 rounded-xl border border-slate-850/60 gap-2">
+                        <span className="text-slate-400 font-medium">
+                          Đã chọn:{' '}
+                          <span className="text-slate-200 font-bold ml-1 uppercase tracking-wide bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                            {userPred.prediction === 'HOME'
+                              ? m.homeTeam
+                              : userPred.prediction === 'AWAY'
+                              ? m.awayTeam
+                              : 'Hòa'}
+                          </span>
+                        </span>
+                        {m.status === 'FINISHED' ? (
+                          userPred.points === 0 ? (
+                            <div className="flex items-center text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/15 text-[10px] uppercase tracking-wider">
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-400" />
+                              <span>0 Điểm (Đoán Đúng)</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center text-red-400 font-bold bg-red-500/5 px-2.5 py-1 rounded-full border border-red-500/15 text-[10px] uppercase tracking-wider">
+                              <XCircle className="w-3.5 h-3.5 mr-1 text-red-400" />
+                              <span>+1 Điểm (Đoán Sai)</span>
+                            </div>
+                          )
+                        ) : (
+                          <span className="text-[10px] text-slate-500 font-mono font-bold uppercase tracking-wider">
+                            Đã lưu tại: {new Date(userPred.votedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+                    ) : m.status === 'FINISHED' ? (
+                      <div className="text-[10.5px] italic text-rose-455 bg-rose-950/10 p-2.5 rounded-xl border border-rose-950/20 text-center font-medium">
+                        Bạn không tham gia dự đoán trận đấu này (0 điểm)
+                      </div>
+                    ) : isLockedOrFinished ? (
+                      <div className="text-[10.5px] bg-slate-950/60 border border-slate-900/40 p-2.5 rounded-xl text-center text-rose-455 font-bold uppercase tracking-wider">
+                        ❌ Bị bỏ lỡ! Đã khóa và không bình chọn kịp (0 điểm)
+                      </div>
+                    ) : (
+                      <div className="text-center text-[10.5px] text-slate-505 font-medium">
+                        ⚡ Bạn chưa chọn dự đoán cho cặp trận này. Đừng để lỡ!
+                      </div>
+                    )}
+
+                  </div>
 
                 </div>
+              );
+            })
+          )}
+        </div>
+      </div>
 
-              </div>
-            );
-          })
+      {/* Table of Completed Matches */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-lg space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center space-x-2.5">
+            <Trophy className="w-5 h-5 text-emerald-400 font-bold" />
+            <h3 className="text-sm font-black text-slate-100 uppercase tracking-wider">
+              Bảng kết quả các trận đấu đã có tỉ số
+            </h3>
+          </div>
+          <span className="text-[10px] font-mono text-slate-400 bg-slate-950 border border-slate-800 px-2.5 py-1 rounded-full uppercase font-bold">
+            Số trận: {completedMatches.length}
+          </span>
+        </div>
+
+        {completedMatches.length === 0 ? (
+          <div className="text-center py-10 text-xs text-slate-500 font-bold uppercase tracking-wider bg-slate-950 rounded-2xl border border-slate-850/60">
+            Chưa có trận đấu nào kết thúc hoặc phù hợp với bộ lọc tìm kiếm.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-900 border-b border-slate-805 text-slate-400 uppercase tracking-wider font-extrabold text-[10px]">
+                  <th className="py-3 px-4 text-center w-16">Mã</th>
+                  <th className="py-3 px-4 w-36">Vòng đấu</th>
+                  <th className="py-3 px-4 text-center min-w-[280px]">Cặp đấu & Tỉ số</th>
+                  <th className="py-3 px-4 w-44">Kèo chấp</th>
+                  <th className="py-3 px-4 w-44">Kèo thắng</th>
+                  {playerPhone && <th className="py-3 px-4 text-center w-52">Dự đoán của bạn</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-850">
+                {completedMatches.map((m) => {
+                  const handicapText = getHandicapText(m.homeTeam, m.awayTeam);
+                  const handicapWinnerName = m.winner === 'HOME' 
+                    ? m.homeTeam 
+                    : m.winner === 'AWAY' 
+                    ? m.awayTeam 
+                    : 'Hòa';
+
+                  const predKey = playerPhone ? `${playerPhone}_${m.id}` : '';
+                  const userPred = playerPhone ? predictions[predKey] : null;
+
+                  return (
+                    <tr key={m.id} className="hover:bg-slate-900/40 transition duration-150">
+                      <td className="py-3.5 px-4 text-center font-bold font-mono text-slate-400">
+                        #{m.id}
+                      </td>
+                      <td className="py-3.5 px-4 font-semibold text-emerald-400">
+                        {m.stage}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center justify-center space-x-3">
+                          <span className="text-slate-200 font-bold truncate max-w-[120px] text-right block w-24">
+                            {getTeamFlag(m.homeTeam)} {m.homeTeam}
+                          </span>
+                          <span className="bg-slate-900 border border-slate-800 text-emerald-400 px-1 py-1 rounded-lg font-mono font-black text-center text-sm w-16 select-none leading-none">
+                            {m.homeScore} - {m.awayScore}
+                          </span>
+                          <span className="text-slate-200 font-bold truncate max-w-[120px] text-left block w-24">
+                            {getTeamFlag(m.awayTeam)} {m.awayTeam}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="inline-block bg-amber-500/10 text-amber-450 font-bold text-[10px] px-2 py-0.5 rounded border border-amber-500/15">
+                          {handicapText}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-emerald-450">
+                        {handicapWinnerName === 'Hòa' ? 'Hòa' : `${handicapWinnerName} thắng`}
+                      </td>
+                      {playerPhone && (
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center justify-center">
+                            {userPred ? (
+                              userPred.points === 0 ? (
+                                <span className="inline-flex items-center space-x-1.5 text-emerald-400 font-extrabold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 text-[10px] uppercase">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                  <span>{userPred.prediction === 'HOME' ? m.homeTeam : userPred.prediction === 'AWAY' ? m.awayTeam : 'Hòa'} (0đ)</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center space-x-1.5 text-red-400 font-bold bg-red-500/5 px-2.5 py-1 rounded-full border border-red-500/15 text-[10px] uppercase">
+                                  <XCircle className="w-3.5 h-3.5 text-red-200 shrink-0" />
+                                  <span>{userPred.prediction === 'HOME' ? m.homeTeam : userPred.prediction === 'AWAY' ? m.awayTeam : 'Hòa'} (+1đ)</span>
+                                </span>
+                              )
+                            ) : (
+                              <span className="inline-flex items-center space-x-1 text-red-400/80 font-medium bg-red-500/5 px-2.5 py-1 rounded-full border border-red-500/10 text-[10px] italic">
+                                ❌ Quên bầu (+1đ)
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
