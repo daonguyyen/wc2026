@@ -165,6 +165,10 @@ export default function MatchList({
   const [predictionTypeFilter, setPredictionTypeFilter] = useState<'ALL' | 'VOTED' | 'NOT_VOTED' | 'OPEN'>('ALL');
   const [showHiddenByAdmin, setShowHiddenByAdmin] = useState(false);
 
+  const [completedSearchQuery, setCompletedSearchQuery] = useState('');
+  const [completedPage, setCompletedPage] = useState(1);
+  const completedPageSize = 8;
+
   const now = new Date(currentTime);
 
   // Filter and sort matches
@@ -206,7 +210,68 @@ export default function MatchList({
   });
 
   const upcomingLiveMatches = filteredMatches.filter((m) => m.status !== 'FINISHED');
-  const completedMatches = filteredMatches.filter((m) => m.status === 'FINISHED');
+
+  // Filter completed matches independently so that completedSearchQuery works specifically on team names
+  const completedMatchesRaw = matches.filter((m) => {
+    if (m.status !== 'FINISHED') return false;
+
+    // 0. Match Visibility Filter
+    if (m.visible === false && (!isAdminUser || !showHiddenByAdmin)) {
+      return false;
+    }
+
+    // 1. Stage Filter
+    if (stageFilter === 'GROUP' && !m.stage.startsWith('Vòng bảng')) return false;
+    if (stageFilter === 'PLAYOFF' && m.stage.startsWith('Vòng bảng')) return false;
+
+    // 2. User Vote Status Filter
+    if (playerPhone) {
+      const predKey = `${playerPhone}_${m.id}`;
+      const hasPred = !!predictions[predKey];
+      if (predictionTypeFilter === 'VOTED' && !hasPred) return false;
+      if (predictionTypeFilter === 'NOT_VOTED' && hasPred) return false;
+    }
+
+    // 3. Team Name Search for Completed Matches
+    if (completedSearchQuery) {
+      const q = completedSearchQuery.toLowerCase().trim();
+      const teamText = `${m.homeTeam} ${m.awayTeam}`.toLowerCase();
+      if (!teamText.includes(q)) return false;
+    }
+
+    // Also honor global search query on completed matches if specific completedSearchQuery is empty
+    if (searchQuery && !completedSearchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchText = `${m.homeTeam} ${m.awayTeam} ${m.stage} trận ${m.id}`.toLowerCase();
+      if (!matchText.includes(q)) return false;
+    }
+
+    return true;
+  });
+
+  // Sort Completed Matches: newest (latest) matchTime first, oldest matchTime last (descending)
+  const sortedCompletedMatches = [...completedMatchesRaw].sort((a, b) => {
+    const timeA = new Date(a.matchTime).getTime();
+    const timeB = new Date(b.matchTime).getTime();
+    if (timeB !== timeA) {
+      return timeB - timeA; // descending order (newest first)
+    }
+    // If times are same, fallback to ID descending
+    return Number(b.id) - Number(a.id);
+  });
+
+  // Pagination for Completed Matches
+  const totalCompletedCount = sortedCompletedMatches.length;
+  const totalPages = Math.max(1, Math.ceil(totalCompletedCount / completedPageSize));
+  const startIndex = (completedPage - 1) * completedPageSize;
+  const paginatedCompletedMatches = sortedCompletedMatches.slice(startIndex, startIndex + completedPageSize);
+
+  // Auto adjusting page count
+  React.useEffect(() => {
+    if (completedPage > totalPages) {
+      setCompletedPage(totalPages);
+    }
+  }, [totalPages, completedPage]);
 
   // Calculate timing status of a match
   const getMatchTimeStatus = (m: Match) => {
@@ -580,20 +645,37 @@ export default function MatchList({
 
       {/* Table of Completed Matches */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-lg space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 gap-3">
           <div className="flex items-center space-x-2.5">
             <Trophy className="w-5 h-5 text-emerald-400 font-bold" />
             <h3 className="text-sm font-black text-slate-100 uppercase tracking-wider">
               Bảng kết quả các trận đấu đã có tỉ số
             </h3>
           </div>
-          <span className="text-[10px] font-mono text-slate-400 bg-slate-950 border border-slate-800 px-2.5 py-1 rounded-full uppercase font-bold">
-            Số trận: {completedMatches.length}
-          </span>
+          
+          {/* Team Search & Global counter */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+            <div className="relative flex-grow sm:w-60">
+              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Tìm tên quốc gia / đội tuyển..."
+                value={completedSearchQuery}
+                onChange={(e) => {
+                  setCompletedSearchQuery(e.target.value);
+                  setCompletedPage(1); // Reset page on query change
+                }}
+                className="w-full bg-slate-950 text-xs text-slate-200 pl-9 pr-3 py-2 border border-slate-800 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/25 transition-all font-medium placeholder-slate-650"
+              />
+            </div>
+            <span className="text-[10px] font-mono text-slate-400 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl uppercase font-bold text-center whitespace-nowrap">
+              Kết quả: {totalCompletedCount} trận
+            </span>
+          </div>
         </div>
 
-        {completedMatches.length === 0 ? (
-          <div className="text-center py-10 text-xs text-slate-500 font-bold uppercase tracking-wider bg-slate-950 rounded-2xl border border-slate-850/60">
+        {totalCompletedCount === 0 ? (
+          <div className="text-center py-10 text-xs text-slate-550 italic bg-slate-950 rounded-2xl border border-slate-850/60 font-medium">
             Chưa có trận đấu nào kết thúc hoặc phù hợp với bộ lọc tìm kiếm.
           </div>
         ) : (
@@ -602,7 +684,7 @@ export default function MatchList({
               <thead>
                 <tr className="bg-slate-900 border-b border-slate-805 text-slate-400 uppercase tracking-wider font-extrabold text-[10px]">
                   <th className="py-3 px-4 text-center w-16">Mã</th>
-                  <th className="py-3 px-4 w-36">Vòng đấu</th>
+                  {/* <th className="py-3 px-4 w-36">Vòng đấu</th> */}
                   <th className="py-3 px-4 text-center min-w-[280px]">Cặp đấu & Tỉ số</th>
                   <th className="py-3 px-4 w-44">Kèo chấp</th>
                   <th className="py-3 px-4 w-44">Kèo thắng</th>
@@ -610,7 +692,7 @@ export default function MatchList({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-850">
-                {completedMatches.map((m) => {
+                {paginatedCompletedMatches.map((m) => {
                   const handicapText = getHandicapText(m.homeTeam, m.awayTeam);
                   const handicapWinnerName = m.winner === 'HOME' 
                     ? m.homeTeam 
@@ -626,15 +708,15 @@ export default function MatchList({
                       <td className="py-3.5 px-4 text-center font-bold font-mono text-slate-400">
                         #{m.id}
                       </td>
-                      <td className="py-3.5 px-4 font-semibold text-emerald-400">
+                      {/* <td className="py-3.5 px-4 font-semibold text-emerald-400">
                         {m.stage}
-                      </td>
+                      </td> */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center justify-center space-x-3">
                           <span className="text-slate-200 font-bold truncate max-w-[120px] text-right block w-24">
                             {getTeamFlag(m.homeTeam)} {m.homeTeam}
                           </span>
-                          <span className="bg-slate-900 border border-slate-800 text-emerald-400 px-1 py-1 rounded-lg font-mono font-black text-center text-sm w-16 select-none leading-none">
+                          <span className="bg-slate-900 border border-slate-800 text-emerald-400 px-3 py-1 rounded-lg font-mono font-black text-center text-sm w-16 select-none leading-none">
                             {m.homeScore} - {m.awayScore}
                           </span>
                           <span className="text-slate-200 font-bold truncate max-w-[120px] text-left block w-24">
@@ -678,6 +760,47 @@ export default function MatchList({
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Improved Pagination Control footer */}
+        {totalCompletedCount > completedPageSize && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-800/80 text-xs text-slate-400 select-none">
+            <div className="font-medium text-[11px] text-slate-500 text-center sm:text-left">
+              Hiển thị <span className="font-mono text-slate-300 font-bold">{startIndex + 1}-{Math.min(startIndex + completedPageSize, totalCompletedCount)}</span> trong tổng số <span className="font-mono text-slate-300 font-bold">{totalCompletedCount}</span> trận đã có tỉ số
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                disabled={completedPage === 1}
+                onClick={() => setCompletedPage((p) => Math.max(1, p - 1))}
+                className={`px-3 py-1.5 rounded-xl border text-[11px] font-extrabold transition cursor-pointer flex items-center space-x-1 ${
+                  completedPage === 1
+                    ? 'bg-slate-950/20 border-slate-900/40 text-slate-605 cursor-not-allowed'
+                    : 'bg-slate-950 hover:bg-slate-850 border-slate-800 text-slate-205 hover:text-slate-100 hover:border-slate-700'
+                }`}
+              >
+                <span>&larr; Mới hơn</span>
+              </button>
+              
+              <div className="text-xs font-black font-mono text-slate-400 px-2.5 py-1 bg-slate-950 border border-slate-850 rounded-lg">
+                Trang {completedPage} / {totalPages}
+              </div>
+
+              <button
+                type="button"
+                disabled={completedPage === totalPages}
+                onClick={() => setCompletedPage((p) => Math.min(totalPages, p + 1))}
+                className={`px-3 py-1.5 rounded-xl border text-[11px] font-extrabold transition cursor-pointer flex items-center space-x-1 ${
+                  completedPage === totalPages
+                    ? 'bg-slate-950/20 border-slate-900/40 text-slate-605 cursor-not-allowed'
+                    : 'bg-slate-950 hover:bg-slate-850 border-slate-800 text-slate-205 hover:text-slate-100 hover:border-slate-700'
+                }`}
+              >
+                <span>Cũ hơn &rarr;</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
