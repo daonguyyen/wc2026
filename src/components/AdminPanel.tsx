@@ -1160,12 +1160,12 @@ export default function AdminPanel({
             onClick={() => handleSaveOutrightConfig()}
             className="bg-emerald-600 hover:bg-emerald-500 font-extrabold text-xs text-white px-5 py-3 rounded-xl transition cursor-pointer hover:shadow-lg hover:shadow-emerald-500/10 shadow"
           >
-            Lưu Kết Quả Oficial & Đồng Bộ Điểm Toàn Bộ
+            Lưu Kết Quả Official & Đồng Bộ Điểm Toàn Bộ
           </button>
         </div>
 
         {/* Player Outright Predictions Matrix */}
-        <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/60">
+        <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/60 shadow-md">
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left border-collapse">
               <thead className="bg-slate-950 text-slate-400 uppercase text-[9px] tracking-wider border-b border-slate-800">
@@ -1203,7 +1203,7 @@ export default function AdminPanel({
                       <tr key={item.code} className="hover:bg-slate-900/40 transition">
                         <td className="py-3.5 px-4">
                           <span className="font-bold text-slate-250 block">{item.name}</span>
-                          <span className="block font-mono text-[9px] text-slate-550 mt-0.5">{item.code}</span>
+                          <span className="block font-mono text-[9px] text-slate-555 mt-0.5">{item.code}</span>
                         </td>
                         
                         {/* Champion */}
@@ -1234,7 +1234,7 @@ export default function AdminPanel({
                               className={`px-2 py-0.5 rounded text-[9px] font-black border transition cursor-pointer ${
                                 ev.goldenBootCorrect 
                                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
-                                  : 'bg-rose-950/20 text-rose-455 border-rose-500/20 hover:border-rose-400/35'
+                                  : 'bg-rose-955/20 text-rose-455 border-rose-500/25 hover:border-rose-400/35'
                               }`}
                             >
                               {ev.goldenBootCorrect ? 'ĐÚNG (Đã trừ 5đ) • ✅' : 'Kích hoạt trừ 5đ'}
@@ -1252,7 +1252,7 @@ export default function AdminPanel({
                               className={`px-2 py-0.5 rounded text-[9px] font-black border transition cursor-pointer ${
                                 ev.goldenGloveCorrect 
                                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
-                                  : 'bg-rose-950/20 text-rose-455 border-rose-500/20 hover:border-rose-400/35'
+                                  : 'bg-rose-950/20 text-rose-455 border-rose-500/25 hover:border-rose-400/35'
                               }`}
                             >
                               {ev.goldenGloveCorrect ? 'ĐÚNG (Đã trừ 5đ) • ✅' : 'Kích hoạt trừ 5đ'}
@@ -1270,7 +1270,7 @@ export default function AdminPanel({
                               className={`px-2 py-0.5 rounded text-[9px] font-black border transition cursor-pointer ${
                                 ev.goldenBallCorrect 
                                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
-                                  : 'bg-rose-950/20 text-rose-455 border-rose-500/20 hover:border-rose-400/35'
+                                  : 'bg-rose-950/20 text-rose-455 border-rose-500/25 hover:border-rose-400/35'
                               }`}
                             >
                               {ev.goldenBallCorrect ? 'ĐÚNG (Đã trừ 5đ) • ✅' : 'Kích hoạt trừ 5đ'}
@@ -1278,107 +1278,6 @@ export default function AdminPanel({
                           )}
                         </td>
 
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* SECTION: USER VOTING HISTORY */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between sm:items-center pb-4 border-b border-slate-800/85 gap-3">
-          <div>
-            <h2 className="text-base font-black text-slate-100 font-display flex items-center gap-2 uppercase">
-              <History className="w-5 h-5 text-sky-400" /> Lịch sử bình chọn của các User
-            </h2>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Tra cứu cụ thể ngày giờ thực tế và lựa chọn dự đoán tỷ số/kết quả của từng thành viên.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <input 
-              type="text"
-              placeholder="Tìm theo tên hoặc mã..."
-              value={historySearch}
-              onChange={e => setHistorySearch(e.target.value)}
-              className="bg-slate-950 border border-slate-850 text-xs font-semibold text-slate-100 rounded-xl py-2 px-3 focus:outline-none w-48"
-            />
-            <button 
-              type="button"
-              onClick={fetchPredictionsHistory} 
-              className="p-2 bg-slate-800 hover:bg-slate-705 rounded-xl text-slate-350 transition cursor-pointer"
-              title="Cập nhật danh sách mới nhất"
-            >
-              <RefreshCw className={`w-4 h-4 ${loadingHistory ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        </div>
-
-        <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/65">
-          <div className="overflow-x-auto max-h-[350px] scrollbar-thin">
-            <table className="w-full text-xs text-left border-collapse">
-              <thead className="bg-slate-950 text-slate-400 uppercase text-[9px] tracking-wider border-b border-slate-800 sticky top-0 z-10">
-                <tr>
-                  <th className="py-3 px-4">Thời gian bình chọn (GMT+7)</th>
-                  <th className="py-3 px-4">Thành viên</th>
-                  <th className="py-3 px-4">Trận đấu</th>
-                  <th className="py-3 px-3 text-center">Lựa chọn</th>
-                  <th className="py-3 px-3 text-center">Cách tính điểm</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-850 text-slate-300">
-                {loadingHistory ? (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-500 italic">Đang tải lịch sử bình chọn...</td>
-                  </tr>
-                ) : filteredHistory.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-500 italic">Không có lịch sử bình chọn nào khớp.</td>
-                  </tr>
-                ) : (
-                  filteredHistory.map((h, idx) => {
-                    const formattedDate = h.votedAt 
-                      ? new Date(h.votedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
-                      : '(chưa rõ thời gian)';
-                    return (
-                      <tr key={`${h.playerPhone}_${h.matchId}_${idx}`} className="hover:bg-slate-900/40 transition">
-                        <td className="py-3 px-4 font-mono text-xs text-slate-400">
-                          {formattedDate}
-                        </td>
-                        <td className="py-3 px-4 text-slate-200">
-                          <span className="font-bold">{h.playerName}</span>
-                          <span className="block font-mono text-[9px] text-slate-500">{h.playerPhone}</span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="font-medium text-slate-300">
-                            Trận #{h.matchId}: <strong className="text-slate-100">{h.homeTeam}</strong> vs <strong className="text-slate-100">{h.awayTeam}</strong>
-                          </span>
-                          <span className="block text-[9.5px] text-slate-500 mt-0.5">Trạng thái: {h.matchStatus === 'FINISHED' ? 'Đã hoàn thành' : 'Chưa hoàn thành'}</span>
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide ${
-                            h.prediction === 'HOME' 
-                              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/20' 
-                              : h.prediction === 'AWAY' 
-                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/20' 
-                                : 'bg-slate-850 text-slate-400 border border-slate-800'
-                          }`}>
-                            {h.prediction === 'HOME' ? 'Thắng (Home) 🟢' : h.prediction === 'AWAY' ? 'Thua (Away) 🔴' : 'Hòa (Draw) 🟡'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-center font-mono">
-                          {h.evaluated ? (
-                            <span className={`text-[11px] font-bold ${h.points === 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {h.points === 0 ? 'Đoán Đúng (0đ)' : `Đoán Sai/Bỏ qua (+${h.points}đ)`}
-                            </span>
-                          ) : (
-                            <span className="text-slate-500 italic text-[11px]">Chưa tổng kết</span>
-                          )}
-                        </td>
                       </tr>
                     );
                   })

@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { LeaderboardEntry } from '../types';
-import { Award, BarChart3, TrendingUp, HelpCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Award, BarChart3, TrendingUp, CheckCircle2, RefreshCw, History } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -23,9 +23,16 @@ import {
 interface StatsDashboardProps {
   leaderboard: LeaderboardEntry[];
   totalPredictionsCount: number;
+  isAdmin?: boolean;
+  adminCode?: string;
 }
 
-export default function StatsDashboard({ leaderboard, totalPredictionsCount }: StatsDashboardProps) {
+export default function StatsDashboard({ 
+  leaderboard, 
+  totalPredictionsCount,
+  isAdmin = false,
+  adminCode
+}: StatsDashboardProps) {
   // Aggregate stats
   const totalPlayers = leaderboard.length;
   const totalMatchesFinished = leaderboard.length > 0 
@@ -57,7 +64,7 @@ export default function StatsDashboard({ leaderboard, totalPredictionsCount }: S
   // Prepare data for Pie Chart (Overall prediction accuracy)
   const accuracyPieData = [
     { name: 'Đúng', value: totalCorrectCount, color: '#34d399' }, // emerald-400
-    { name: 'Sai', value: totalWrongCount, color: '#f87171' }, // red-400
+    { name: 'Sai', value: totalWrongCount, color: '#f87171' }, // red-450
   ];
 
   // Colors for charts
@@ -66,6 +73,60 @@ export default function StatsDashboard({ leaderboard, totalPredictionsCount }: S
     CORRECT: '#60a5fa', // blue-400
     WRONG: '#f87171', // red-450
   };
+
+  // State for user voting history (Moved from AdminPanel)
+  const [historyList, setHistoryList] = React.useState<{
+    playerPhone: string;
+    playerName: string;
+    matchId: string;
+    homeTeam: string;
+    awayTeam: string;
+    prediction: 'HOME' | 'DRAW' | 'AWAY';
+    votedAt: string;
+    points: number;
+    evaluated: boolean;
+    matchStatus: string;
+  }[]>([]);
+  const [loadingHistory, setLoadingHistory] = React.useState(false);
+  const [historySearch, setHistorySearch] = React.useState('');
+
+  const fetchPredictionsHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const headers: Record<string, string> = {};
+      if (isAdmin && adminCode) {
+        headers['x-admin-code'] = adminCode;
+      }
+      const res = await fetch('/api/predictions-history', { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setHistoryList(data.history || []);
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải lịch sử bình chọn:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchPredictionsHistory();
+  }, [isAdmin, adminCode]);
+
+  const filteredHistory = historyList.filter(h => {
+    // Only search/filter if user is admin
+    if (!isAdmin) return true;
+    
+    const query = historySearch.toLowerCase().trim();
+    if (!query) return true;
+    return (
+      h.playerName.toLowerCase().includes(query) ||
+      h.playerPhone.toLowerCase().includes(query) ||
+      h.homeTeam.toLowerCase().includes(query) ||
+      h.awayTeam.toLowerCase().includes(query) ||
+      h.matchId.includes(query)
+    );
+  });
 
   return (
     <div id="stats-dashboard-container" className="space-y-6">
@@ -235,6 +296,111 @@ export default function StatsDashboard({ leaderboard, totalPredictionsCount }: S
           <p>
             - <strong>Tỉ lệ cạnh tranh bứt phá:</strong> World Cup với thể chế gồm 104 trận đấu tranh hùng toàn lục địa Bắc Mỹ sẽ kiểm chứng tài thao lược bền bỉ. Với đặc quy chế đóng băng cổng bình chọn nghiêm ngặt sau <strong>15 phút bóng lăn</strong>, mỗi tay dự đoán thông thái cần nhạy bén cập nhật tình hình ra sân để mang về những điểm số vàng ròng!
           </p>
+        </div>
+      </div>
+
+      {/* SECTION: USER VOTING HISTORY (Viewable by all users, search & codes restricted to Admin) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center pb-4 border-b border-slate-800/85 gap-3">
+          <div>
+            <h2 className="text-base font-black text-slate-100 font-display flex items-center gap-2 uppercase">
+              <History className="w-5 h-5 text-sky-400" /> Lịch sử bình chọn của các User
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Tra cứu cụ thể ngày giờ thực tế và lựa chọn dự đoán tỷ số/kết quả của từng thành viên.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <input 
+                type="text"
+                placeholder="Tìm theo tên hoặc mã..."
+                value={historySearch}
+                onChange={e => setHistorySearch(e.target.value)}
+                className="bg-slate-950 border border-slate-850 text-xs font-semibold text-slate-100 rounded-xl py-2 px-3 focus:outline-none w-48"
+              />
+            )}
+            <button 
+              type="button"
+              onClick={fetchPredictionsHistory} 
+              className="p-2 bg-slate-800 hover:bg-slate-705 rounded-xl text-slate-350 transition cursor-pointer"
+              title="Cập nhật danh sách mới nhất"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingHistory ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/65">
+          <div className="overflow-x-auto max-h-[350px] scrollbar-thin">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-slate-950 text-slate-400 uppercase text-[9px] tracking-wider border-b border-slate-800 sticky top-0 z-10">
+                <tr>
+                  <th className="py-3 px-4">Thời gian bình chọn (GMT+7)</th>
+                  <th className="py-3 px-4">Thành viên</th>
+                  <th className="py-3 px-4">Trận đấu</th>
+                  <th className="py-3 px-3 text-center">Lựa chọn</th>
+                  <th className="py-3 px-3 text-center">Cách tính điểm</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-850 text-slate-300">
+                {loadingHistory ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-slate-500 italic">Đang tải lịch sử bình chọn...</td>
+                  </tr>
+                ) : filteredHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-slate-500 italic">Không có lịch sử bình chọn nào khớp.</td>
+                  </tr>
+                ) : (
+                  filteredHistory.map((h, idx) => {
+                    const formattedDate = h.votedAt 
+                      ? new Date(h.votedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+                      : '(chưa rõ thời gian)';
+                    return (
+                      <tr key={`${h.playerPhone}_${h.matchId}_${idx}`} className="hover:bg-slate-900/40 transition">
+                        <td className="py-3 px-4 font-mono text-xs text-slate-400">
+                          {formattedDate}
+                        </td>
+                        <td className="py-3 px-4 text-slate-200">
+                          <span className="font-bold">{h.playerName}</span>
+                          {isAdmin && h.playerPhone !== '******' && (
+                            <span className="block font-mono text-[9px] text-slate-500">{h.playerPhone}</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-medium text-slate-300">
+                            Trận #{h.matchId}: <strong className="text-slate-100">{h.homeTeam}</strong> vs <strong className="text-slate-100">{h.awayTeam}</strong>
+                          </span>
+                          <span className="block text-[9.5px] text-slate-500 mt-0.5">Trạng thái: {h.matchStatus === 'FINISHED' ? 'Đã hoàn thành' : 'Chưa hoàn thành'}</span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide ${
+                            h.prediction === 'HOME' 
+                              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/20' 
+                              : h.prediction === 'AWAY' 
+                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/20' 
+                                : 'bg-slate-850 text-slate-400 border border-slate-800'
+                          }`}>
+                            {h.prediction === 'HOME' ? 'Thắng (Home) 🟢' : h.prediction === 'AWAY' ? 'Thua (Away) 🔴' : 'Hòa (Draw) 🟡'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center font-mono">
+                          {h.evaluated ? (
+                            <span className={`text-[11px] font-bold ${h.points === 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {h.points === 0 ? 'Đoán Đúng (0đ)' : `Đoán Sai/Bỏ qua (+${h.points}đ)`}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 italic text-[11px]">Chưa tổng kết</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

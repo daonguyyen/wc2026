@@ -470,7 +470,7 @@ export default function App() {
                       {isRegisterMode ? 'Đăng Ký Tài Khoản' : 'Chọn Vào Dự Đoán'}
                     </h3>
                   </div>
-                  {/* <button
+                  <button
                     type="button"
                     onClick={() => {
                       setIsRegisterMode(!isRegisterMode);
@@ -481,7 +481,7 @@ export default function App() {
                     className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-900/20 px-2.5 py-1 rounded-full border border-emerald-500/10 hover:border-emerald-500/30 transition cursor-pointer"
                   >
                     {isRegisterMode ? 'Về Đăng nhập' : 'Tạo Acc mới 🆕'}
-                  </button> */}
+                  </button>
                 </div>
 
                 {/* Main Dynamic Form */}
@@ -853,6 +853,8 @@ export default function App() {
                 <StatsDashboard
                   leaderboard={leaderboard}
                   totalPredictionsCount={Object.keys(predictions).length || leaderboard.reduce((acc, entry) => acc + entry.predictedCount, 0)}
+                  isAdmin={player?.name === 'Usr-Bop'}
+                  adminCode={player?.phoneNumber}
                 />
               )}
 
