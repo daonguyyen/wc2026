@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import confetti from 'canvas-confetti';
 import { Player, Match, Prediction, MatchOdds, LeaderboardEntry } from './types';
 import MatchList from './components/MatchList';
 import StatsDashboard from './components/StatsDashboard';
@@ -25,6 +26,9 @@ import {
   Sparkles,
   Info,
   Calendar,
+  ChevronDown,
+  ChevronUp,
+  Star,
 } from 'lucide-react';
 
 export default function App() {
@@ -36,6 +40,22 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [selectedPlayerName, setSelectedPlayerName] = useState('');
+
+  // Rules visibility states (initially collapsed)
+  const [showRules, setShowRules] = useState(false);
+  
+  // Selected hall of fame member to pop up
+  const [selectedHallOfFamer, setSelectedHallOfFamer] = useState<{
+    name: string;
+    points: number;
+    rank: number;
+    title: string;
+    medal: string;
+    bgColor: string;
+    textColor: string;
+    outlineColor: string;
+    description: string;
+  } | null>(null);
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
@@ -170,6 +190,79 @@ export default function App() {
     } catch (e) {
       notify('Lỗi kết nối máy chủ khi nộp dự đoán', 'error');
     }
+  };
+
+  // Handle clicking on a Hall of Fame member
+  const handleHallOfFameClick = (member: {
+    name: string;
+    points: number;
+    rank: number;
+    title: string;
+    medal: string;
+    bgColor: string;
+    textColor: string;
+    outlineColor: string;
+    description: string;
+  }) => {
+    setSelectedHallOfFamer(member);
+    
+    // Play spectacular interactive confetti burst patterns!
+    
+    // 1. Initial explosion from bottom center
+    confetti({
+      particleCount: 150,
+      spread: 90,
+      origin: { y: 0.6 },
+      colors: ['#fbbf24', '#f59e0b', '#34d399', '#3b82f6', '#ec4899', '#ffffff']
+    });
+
+    // 2. Delayed fireworks bursts from left side
+    setTimeout(() => {
+      confetti({
+        particleCount: 70,
+        angle: 65,
+        spread: 60,
+        origin: { x: 0, y: 0.8 },
+        colors: ['#fbbf24', '#34d399', '#ffffff', '#818cf8']
+      });
+    }, 150);
+
+    // 3. Delayed fireworks bursts from right side
+    setTimeout(() => {
+      confetti({
+        particleCount: 70,
+        angle: 115,
+        spread: 60,
+        origin: { x: 1, y: 0.8 },
+        colors: ['#fbbf24', '#e2e8f0', '#ffffff', '#fb7185']
+      });
+    }, 300);
+
+    // 4. Sparkling star shower animation
+    const duration = 1200;
+    const animationEnd = Date.now() + duration;
+    
+    const randomInRange = (min: number, max: number) => {
+      return Math.random() * (max - min) + min;
+    };
+
+    const interval = setInterval(() => {
+      const timeLeft = animationEnd - Date.now();
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+      
+      const particleCount = 20 * (timeLeft / duration);
+      
+      confetti({
+        particleCount,
+        startVelocity: 30,
+        spread: 360,
+        ticks: 50,
+        origin: { x: randomInRange(0.1, 0.9), y: randomInRange(0.1, 0.5) },
+        colors: ['#fbbf24', '#34d399', '#f59e0b']
+      });
+    }, 100);
   };
 
   // Perform Login with a 6-char code
@@ -554,20 +647,121 @@ export default function App() {
               </div>
             )}
 
-            {/* Quick Helper guidelines Card (Bento styled) */}
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
-              <span className="block text-xs font-bold text-slate-350 uppercase tracking-wider flex items-center font-display">
-                <Info className="w-4 h-4 text-emerald-450 mr-2 shrink-0" />
-                <span>Quy định Tính Điểm 🏆</span>
-              </span>
-              <ul className="text-[11px] text-slate-400 space-y-2.5 list-disc pl-4 leading-relaxed">
-                <li>Đăng nhập để lưu dự đoán trận đấu & dự đoán chung cuộc (outrights).</li>
-                <li><strong>Cách tính điểm:</strong> Mỗi dự đoán <span className="text-rose-400 font-semibold">Sai hoặc Quên bình chọn</span> khi khóa cửa nhận <span className="text-rose-400 font-semibold">+1 điểm</span>, đoán đúng nhận <span className="text-emerald-400 font-semibold">0 điểm</span>. <strong>Ai ít điểm nhất sẽ thắng cuộc!</strong></li>
-                <li><strong>Khấu trừ dài hạn:</strong> Đoán đúng Champion được <span className="text-emerald-400 font-bold">trừ -10đ</span>, đúng Vua phá lưới / Găng tay Vàng / Quả bóng Vàng được <span className="text-emerald-400 font-bold">trừ -5đ</span> vào điểm tổng.</li>
-                <li>Mở khóa dự đoán dài hạn trước <strong>00h00 ngày 19/06/2026</strong>. Sau giờ này sẽ khóa 🔒.</li>
-              </ul>
+            {/* Quick Helper guidelines Card (Bento styled, collapsible) */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 hover:border-slate-800/80 transition shadow-lg space-y-4">
+              <button
+                type="button"
+                onClick={() => setShowRules(!showRules)}
+                className="w-full flex items-center justify-between text-xs font-bold text-slate-350 uppercase tracking-wider font-display cursor-pointer select-none focus:outline-none"
+              >
+                <div className="flex items-center">
+                  <Info className="w-4 h-4 text-emerald-450 mr-2 shrink-0" />
+                  <span>Quy định Tính Điểm 🏆</span>
+                </div>
+                {showRules ? (
+                  <ChevronUp className="w-4 h-4 text-slate-450 transition-transform" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-450 transition-transform" />
+                )}
+              </button>
+              
+              <AnimatePresence>
+                {showRules && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    className="overflow-hidden"
+                  >
+                    <ul className="text-[11px] text-slate-400 space-y-2.5 list-disc pl-4 pr-1 leading-relaxed pt-3 border-t border-slate-800/60 font-sans mt-3">
+                      <li>Đăng nhập để lưu dự đoán trận đấu & dự đoán chung cuộc (outrights).</li>
+                      <li><strong>Cách tính điểm:</strong> Mỗi dự đoán <span className="text-rose-400 font-semibold">Sai hoặc Quên bình chọn</span> khi khóa cửa nhận <span className="text-rose-400 font-semibold">+1 điểm</span>, đoán đúng nhận <span className="text-emerald-400 font-semibold">0 điểm</span>. <strong>Ai ít điểm nhất sẽ thắng cuộc!</strong></li>
+                      <li><strong>Khấu trừ dài hạn:</strong> Đoán đúng Champion được <span className="text-emerald-400 font-bold">trừ -10đ</span>, đúng Vua phá lưới / Găng tay Vàng / Quả bóng Vàng được <span className="text-emerald-400 font-bold">trừ -5đ</span> vào điểm tổng.</li>
+                      <li>Mở khóa dự đoán dài hạn trước <strong>00h00 ngày 19/06/2026</strong>. Sau giờ này sẽ khóa 🔒.</li>
+                    </ul>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
+            {/* VIP HALL OF FAME: TOP 3 LOWEST POINTS LAST SEASON */}
+            <div id="hall-of-fame-block" className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-amber-500/10 transition-all duration-300 -mr-10 -mt-10" />
+              
+              <div className="flex items-center space-x-2.5 mb-4 pb-2 border-b border-slate-800/60 font-sans">
+                <div className="p-2 bg-amber-500/10 rounded-xl text-amber-400">
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-100 uppercase tracking-wider font-display">
+                    Bảng Vàng Mùa Trước 🎖️
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5 select-none leading-tight">Vinh danh Top 3 nhà tiên tri siêu phòng ngự ít điểm nhất</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                {[
+                  {
+                    name: 'E Bo',
+                    points: 27,
+                    rank: 1,
+                    title: 'Quán Quân Toàn Khóa 🏆',
+                    medal: '🥇 Quán Quân',
+                    bgColor: 'from-amber-400/15 via-amber-500/5 to-transparent border-amber-500/30',
+                    textColor: 'text-amber-400',
+                    outlineColor: 'shadow-amber-500/5',
+                    description: 'Chiến thần phòng ngự tối cao! Hoàn thành mùa giải trước với số điểm phạt vỏn vẹn 27đ - kỷ lục bất bại vượt qua mọi bão táp vòng bảng.'
+                  },
+                  {
+                    name: 'E Bảy',
+                    points: 30,
+                    rank: 2,
+                    title: 'Á Quân Xuất Sắc 🥈',
+                    medal: '🥈 Á Quân',
+                    bgColor: 'from-slate-400/15 via-slate-500/5 to-transparent border-slate-400/25',
+                    textColor: 'text-slate-200',
+                    outlineColor: 'shadow-slate-400/5',
+                    description: 'Kiên cường bám đuổi sát nút với 30đ phạt. Sở hữu chiến lược né tránh rủi ro thượng thừa, xứng đáng lưu danh bảng vàng.'
+                  },
+                  {
+                    name: 'A Bop',
+                    points: 34,
+                    rank: 3,
+                    title: 'Hạng Ba Danh Giá 🥉',
+                    medal: '🥉 Hạng Ba',
+                    bgColor: 'from-amber-700/15 via-amber-800/5 to-transparent border-amber-700/20',
+                    textColor: 'text-amber-500',
+                    outlineColor: 'shadow-amber-700/5',
+                    description: 'Tận dụng tuyệt đối quyền năng dự đoán chính xác để cán mốc 34đ phạt. Án ngữ bục vinh quang thứ ba đầy ngoạn mục!'
+                  }
+                ].map((member) => (
+                  <button
+                    key={member.rank}
+                    type="button"
+                    onClick={() => handleHallOfFameClick(member)}
+                    className="w-full text-left bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-slate-800/60 rounded-2xl p-3 flex items-center justify-between hover:border-slate-700 hover:scale-[1.02] active:scale-98 transition-all duration-200 cursor-pointer shadow-sm select-none"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="text-2xl filter drop-shadow select-none">
+                        {member.rank === 1 ? '🥇' : member.rank === 2 ? '🥈' : '🥉'}
+                      </span>
+                      <div>
+                        <div className="font-bold text-xs text-slate-100/90">{member.name}</div>
+                        <div className="text-[9px] text-slate-450 uppercase tracking-widest font-mono mt-0.5 font-semibold">
+                          {member.rank === 1 ? 'Quán Quân' : member.rank === 2 ? 'Á Quân' : 'Hạng 3'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right flex flex-col items-end">
+                      <div className="font-mono font-black text-xs text-emerald-400">{member.points}đ</div>
+                      <span className="text-[8px] text-slate-500 tracking-wider">Mùa trước</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* MAIN VISUAL COLUMN: Top Tabs Selector & Layout Render */}
@@ -891,6 +1085,108 @@ export default function App() {
           <span className="text-emerald-500">TRẠNG THÁI MÁY CHỦ: ONLINE</span>
         </div>
       </footer>
+
+      {/* Hall of Fame Spectacular Popup Modal */}
+      <AnimatePresence>
+        {selectedHallOfFamer && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl flex items-center justify-center p-4 z-50 select-none overflow-hidden"
+            onClick={() => setSelectedHallOfFamer(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.85, y: 40, opacity: 0 }}
+              animate={{ 
+                scale: 1, 
+                y: 0, 
+                opacity: 1,
+                transition: { type: "spring", damping: 25, stiffness: 350 }
+              }}
+              exit={{ scale: 0.85, y: 30, opacity: 0 }}
+              className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 max-w-sm w-full shadow-2xl relative text-center overflow-hidden group/modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Decorative particles */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-emerald-500/15 rounded-full blur-2xl pointer-events-none -mt-24 group-hover/modal:bg-emerald-500/25 transition-all duration-500" />
+              
+              {/* Rotating Gold Aura for #1 */}
+              {selectedHallOfFamer.rank === 1 && (
+                <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/5 via-transparent to-yellow-500/5 rounded-[32px] pointer-events-none" />
+              )}
+
+              {/* Position Medal Icon */}
+              <motion.div
+                initial={{ scale: 0.4, rotate: -20, opacity: 0 }}
+                animate={{ 
+                  scale: 1, 
+                  rotate: 0,
+                  opacity: 1,
+                }}
+                transition={{ 
+                  delay: 0.1, 
+                  type: "spring", 
+                  stiffness: 260, 
+                  damping: 15 
+                }}
+                className="mx-auto w-24 h-24 bg-slate-950 rounded-full border-2 border-slate-800/80 p-2 flex items-center justify-center relative shadow-lg"
+              >
+                {/* Visual medal design */}
+                <div className="absolute inset-1 rounded-full bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-850" />
+                <span className="text-5xl z-10 filter drop-shadow animate-bounce select-none">
+                  {selectedHallOfFamer.rank === 1 ? '🥇' : selectedHallOfFamer.rank === 2 ? '🥈' : '🥉'}
+                </span>
+                
+                {/* Halo rings */}
+                <span className="absolute -inset-1 rounded-full border border-amber-500/20 animate-ping opacity-60" />
+              </motion.div>
+
+              {/* Title & Rank */}
+              <div className="mt-6 space-y-1">
+                <span className="text-[10px] font-black tracking-widest uppercase font-mono bg-slate-100/10 px-3 py-1 rounded-full text-slate-350 border border-slate-800">
+                  {selectedHallOfFamer.medal} Mùa Trước
+                </span>
+                <h4 className="text-2xl font-black text-slate-100 font-display tracking-tight pt-2">
+                  {selectedHallOfFamer.name}
+                </h4>
+              </div>
+
+              {/* Points Badge */}
+              <div className="my-6 bg-slate-950 border border-slate-850/60 p-4 rounded-2xl flex flex-col justify-center items-center relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-1 bg-slate-900/40 rounded-bl-xl">
+                  <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-black">Chung cuộc</span>
+                </div>
+                <div className="flex items-baseline space-x-1.5 pt-1">
+                  <span className="text-4xl font-mono font-black text-emerald-400 tracking-tight">
+                    {selectedHallOfFamer.points}
+                  </span>
+                  <span className="text-xs text-slate-400 font-bold">Điểm phạt</span>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1 uppercase font-semibold tracking-wider">
+                  Trụ hạng vàng • Top {selectedHallOfFamer.rank} siêu thủ
+                </p>
+              </div>
+
+              {/* Summary Description text */}
+              <p className="text-slate-350 text-xs leading-relaxed px-1 font-sans">
+                {selectedHallOfFamer.description}
+              </p>
+
+              {/* Nice motivational footer quote */}
+              <div className="mt-6 border-t border-slate-850/60 pt-5 flex flex-col gap-3 font-sans">
+                <button
+                  type="button"
+                  onClick={() => setSelectedHallOfFamer(null)}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-lg hover:shadow-emerald-500/20 transition duration-200 cursor-pointer active:scale-95"
+                >
+                  Đóng & Chúc Mừng 🎉
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
