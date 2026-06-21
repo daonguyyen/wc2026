@@ -47,6 +47,15 @@ export default function AdminPanel({
   const [outrightEvaluations, setOutrightEvaluations] = useState<Record<string, any>>({});
   const [loadingConfig, setLoadingConfig] = useState(false);
 
+  // Section visibility states toggles (Default: false / collapsed)
+  const [showSimulator, setShowSimulator] = useState(false);
+  const [showMembersList, setShowMembersList] = useState(false);
+  const [showOutrightsAdmin, setShowOutrightsAdmin] = useState(false);
+
+  // Pagination for admin Ghi Nhận Tỉ Số matches
+  const [matchPage, setMatchPage] = useState(1);
+  const matchPageSize = 8;
+
   // States for user voting history and backups
   const [historyList, setHistoryList] = useState<{
     playerPhone: string;
@@ -542,6 +551,34 @@ export default function AdminPanel({
       `trận ${m.id}`.includes(query)
     );
   });
+
+  // Sort: Unfinished first (earliest kickoff time first), finished last (earliest kickoff time first)
+  const sortedAdminMatches = [...filteredMatches].sort((a, b) => {
+    const aFinished = a.status === 'FINISHED';
+    const bFinished = b.status === 'FINISHED';
+    if (aFinished !== bFinished) {
+      return aFinished ? 1 : -1; // Unfinished (false) comes first, finished (true) goes last
+    }
+    return new Date(a.matchTime).getTime() - new Date(b.matchTime).getTime();
+  });
+
+  // Pagination totals and slice
+  const totalMatchCount = sortedAdminMatches.length;
+  const totalMatchPages = Math.max(1, Math.ceil(totalMatchCount / matchPageSize));
+  const matchStartIndex = (matchPage - 1) * matchPageSize;
+  const paginatedAdminMatches = sortedAdminMatches.slice(matchStartIndex, matchStartIndex + matchPageSize);
+
+  // Auto adjusting page count
+  useEffect(() => {
+    if (matchPage > totalMatchPages) {
+      setMatchPage(totalMatchPages);
+    }
+  }, [totalMatchPages, matchPage]);
+
+  // Reset page to 1 when search query changes
+  useEffect(() => {
+    setMatchPage(1);
+  }, [searchQuery]);
   
   const filteredHistory = historyList.filter(h => {
     const query = historySearch.toLowerCase().trim();
@@ -635,17 +672,28 @@ export default function AdminPanel({
       {/* Simulation Controls Card (Bento Rounded 3xl) */}
       <div className="bg-slate-900 border border-emerald-500/20 rounded-3xl p-6 shadow-xl space-y-4">
         
-        <div className="flex items-center space-x-3">
-          <div className="p-2.5 bg-emerald-500/10 rounded-2xl text-emerald-400">
-            <Sliders className="w-5 h-5" />
+        <div className="flex items-center justify-between pb-2 border-b border-slate-805/65 gap-3">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-emerald-500/10 rounded-2xl text-emerald-400">
+              <Sliders className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-100 font-display">Bảng Điều Khiển Giả Lập</h2>
+              <div className="text-[11px] text-slate-400 mt-0.5">Thời gian thực tế ảo & đổ mẫu hệ thống</div>
+            </div>
           </div>
-          <div>
-            <h2 className="text-base font-bold text-slate-100 font-display">Bảng Điều Khiển Giả Lập</h2>
-            <div className="text-[11px] text-slate-400 mt-0.5">Thời gian thực tế ảo & đổ mẫu hệ thống</div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowSimulator(!showSimulator)}
+            className="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-850 text-[11px] font-bold border border-slate-800 text-slate-300 hover:text-white transition duration-200 cursor-pointer whitespace-nowrap select-none"
+          >
+            {showSimulator ? 'ẨN TRÌNH GIẢ LẬP 🙈' : 'HIỆN TRÌNH GIẢ LẬP 🎮'}
+          </button>
         </div>
 
-        <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
+        {showSimulator && (
+          <>
+            <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
           Chào mừng đến với Trình quản lý Demo World Cup 2026. Để giúp bạn dễ dàng theo dõi trực quan và kiểm chứng quy luật khóa cổng dự đoán sau <strong>15 phút bóng lăn</strong>, bạn có thể chỉnh tương lai/quá khứ thời thế máy chủ ảo hoặc nạp sẵn nhóm người chơi cùng lịch sử đoán ảo để các bảng biểu, biểu đồ tranh tài được tô điểm lộng lẫy nhất.
         </p>
 
@@ -805,13 +853,15 @@ export default function AdminPanel({
           </div>
 
         </div>
+          </>
+        )}
       </div>
 
       {/* Registered Players and Passcodes Card */}
       <div id="admin-members-card" className="bg-slate-900 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4">
-        <div className="flex items-center space-x-3 pb-2 border-b border-slate-800/60 justify-between">
+        <div className="flex items-center pb-2 border-b border-slate-800/60 justify-between gap-4">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-indigo-500/10 rounded-2xl text-indigo-400">
+            <div className="p-2.5 bg-indigo-500/10 rounded-2xl text-indigo-400 font-sans">
               <Users className="w-5 h-5" />
             </div>
             <div>
@@ -819,18 +869,29 @@ export default function AdminPanel({
               <p className="text-[11px] text-slate-400 mt-0.5">Quản lý tài khoản và xem mã bí mật 6 số của từng người (Admin Only)</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={fetchPlayersList}
-            disabled={loadingPlayers}
-            className="text-[10px] text-slate-400 hover:text-slate-200 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-850 transition flex items-center gap-1 cursor-pointer active:scale-95"
-          >
-            {loadingPlayers ? <Loader2 className="w-3 h-3 animate-spin text-indigo-400" /> : <RefreshCw className="w-3 h-3" />}
-            <span>Tải lại</span>
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowMembersList(!showMembersList)}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-850 text-[11px] font-bold border border-slate-800 text-slate-300 hover:text-white transition duration-200 cursor-pointer whitespace-nowrap select-none"
+            >
+              {showMembersList ? 'ẨN DANH SÁCH 🙈' : 'HIỆN DANH SÁCH 👥'}
+            </button>
+            <button
+              type="button"
+              onClick={fetchPlayersList}
+              disabled={loadingPlayers}
+              className="text-[10px] text-slate-400 hover:text-slate-200 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-850 transition flex items-center gap-1 cursor-pointer active:scale-95 select-none"
+            >
+              {loadingPlayers ? <Loader2 className="w-3 h-3 animate-spin text-indigo-400" /> : <RefreshCw className="w-3 h-3" />}
+              <span>Tải lại</span>
+            </button>
+          </div>
         </div>
 
-        <p className="text-xs text-slate-350 leading-relaxed">
+        {showMembersList && (
+          <>
+            <p className="text-xs text-slate-350 leading-relaxed">
           Sổ danh bạ chính thức tổng hợp các thành viên đã đăng ký tham gia đoán trận. Mật mật mã 6 số được hiển thị trực tiếp ở đây để Admin hỗ trợ người chơi quên hoặc mất mật danh đăng nhập.
         </p>
 
@@ -866,6 +927,8 @@ export default function AdminPanel({
             })
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* Match Scores Input Section (Bento Rounded 3xl) */}
@@ -938,14 +1001,14 @@ export default function AdminPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-850/60 text-slate-300">
-              {filteredMatches.length === 0 ? (
+              {paginatedAdminMatches.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-500 font-bold uppercase tracking-widest">
                     Chưa tìm thấy cặp trận đấu nào khớp bộ lọc tìm kiếm.
                   </td>
                 </tr>
               ) : (
-                filteredMatches.map((m) => {
+                paginatedAdminMatches.map((m) => {
                   const isBeingUpdated = updatingMatchId === m.id;
                   const isFinished = m.status === 'FINISHED';
 
@@ -1088,11 +1151,57 @@ export default function AdminPanel({
           </table>
         </div>
 
+        {/* Pagination Controls */}
+        {totalMatchPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-800/80 pt-4 gap-3 text-[11px] pb-1 select-none">
+            <span className="text-slate-400 font-sans leading-relaxed text-center sm:text-left">
+              Hiển thị <span className="text-slate-200 font-bold">{(matchPage - 1) * matchPageSize + 1} - {Math.min(matchPage * matchPageSize, totalMatchCount)}</span> trong tổng số <span className="text-slate-200 font-bold">{totalMatchCount}</span> trận đấu
+            </span>
+            <div className="flex items-center space-x-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMatchPage(1)}
+                disabled={matchPage === 1}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-850 text-[10px] font-semibold border border-slate-850 text-slate-400 hover:text-slate-200 disabled:opacity-40 hover:disabled:text-slate-400 active:scale-95 transition cursor-pointer select-none"
+              >
+                Đầu
+              </button>
+              <button
+                type="button"
+                onClick={() => setMatchPage((prev) => Math.max(1, prev - 1))}
+                disabled={matchPage === 1}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-850 text-[10px] font-semibold border border-slate-850 text-slate-400 hover:text-slate-200 disabled:opacity-40 hover:disabled:text-slate-400 active:scale-95 transition cursor-pointer select-none"
+              >
+                Trước
+              </button>
+              <span className="font-mono font-bold text-slate-300 bg-slate-900 border border-slate-850 py-1.5 px-3 rounded-lg text-center min-w-16">
+                P. {matchPage} / {totalMatchPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setMatchPage((prev) => Math.min(totalMatchPages, prev + 1))}
+                disabled={matchPage === totalMatchPages}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-850 text-[10px] font-semibold border border-slate-850 text-slate-400 hover:text-slate-200 disabled:opacity-40 hover:disabled:text-slate-450 active:scale-95 transition cursor-pointer select-none"
+              >
+                Sau
+              </button>
+              <button
+                type="button"
+                onClick={() => setMatchPage(totalMatchPages)}
+                disabled={matchPage === totalMatchPages}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-850 text-[10px] font-semibold border border-slate-850 text-slate-400 hover:text-slate-200 disabled:opacity-40 hover:disabled:text-slate-450 active:scale-95 transition cursor-pointer select-none"
+              >
+                Cuối
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* SECTION: OUTRIGHT PREDICTIONS ADMINISTRATIVE REGION */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
-        <div className="flex justify-between items-center pb-4 border-b border-slate-800/80">
+        <div className="flex justify-between items-center pb-4 border-b border-slate-800/80 gap-3">
           <div>
             <h2 className="text-base font-black text-slate-100 font-display flex items-center gap-2 uppercase">
               🏆 Đánh giá kết quả chung cuộc (Outrights)
@@ -1101,14 +1210,26 @@ export default function AdminPanel({
               Admin điền kết quả chính thức hoặc tích chọn trực tiếp những người đoán trúng để khấu trừ điểm tổng.
             </p>
           </div>
-          <button 
-            type="button"
-            onClick={fetchOutrightConfig} 
-            className="text-xs font-bold leading-normal bg-slate-800 hover:bg-slate-700 py-2 px-3.5 rounded-xl text-slate-350 transition shrink-0 cursor-pointer"
-          >
-            Nạp lại 🔃
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowOutrightsAdmin(!showOutrightsAdmin)}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-850 text-[11px] font-bold border border-slate-800 text-slate-300 hover:text-white transition duration-200 cursor-pointer whitespace-nowrap select-none"
+            >
+              {showOutrightsAdmin ? 'ẨN OUTRIGHTS 🙈' : 'HIỆN OUTRIGHTS 🏆'}
+            </button>
+            <button 
+              type="button"
+              onClick={fetchOutrightConfig} 
+              className="text-xs font-bold leading-normal bg-slate-800 hover:bg-slate-705 py-2 px-3.5 rounded-xl text-slate-350 transition cursor-pointer select-none"
+            >
+              Nạp lại 🔃
+            </button>
+          </div>
         </div>
+
+        {showOutrightsAdmin && (
+          <>
 
         {/* Inputs for Official Winners */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1286,6 +1407,8 @@ export default function AdminPanel({
             </table>
           </div>
         </div>
+          </>
+        )}
       </div>
 
       {/* SECTION: BACKUP & DATA RETRIEVAL REGION */}

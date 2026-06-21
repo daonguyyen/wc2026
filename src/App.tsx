@@ -45,6 +45,7 @@ export default function App() {
   const [isSimulatingTime, setIsSimulatingTime] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'MATCHES' | 'LEADERBOARD' | 'STATS' | 'ADMIN'>('MATCHES');
+  const [showOutrightsPanel, setShowOutrightsPanel] = useState(false);
   const [searchLeaderboardQuery, setSearchLeaderboardQuery] = useState('');
   const [countdownString, setCountdownString] = useState('');
   
@@ -470,18 +471,7 @@ export default function App() {
                       {isRegisterMode ? 'Đăng Ký Tài Khoản' : 'Chọn Vào Dự Đoán'}
                     </h3>
                   </div>
-                  {/* <button
-                    type="button"
-                    onClick={() => {
-                      setIsRegisterMode(!isRegisterMode);
-                      setLoginError('');
-                      setPhoneNumberInput('');
-                      setNameInput('');
-                    }}
-                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-900/20 px-2.5 py-1 rounded-full border border-emerald-500/10 hover:border-emerald-500/30 transition cursor-pointer"
-                  >
-                    {isRegisterMode ? 'Về Đăng nhập' : 'Tạo Acc mới 🆕'}
-                  </button> */}
+                  {/* Registration button hidden per user request */}
                 </div>
 
                 {/* Main Dynamic Form */}
@@ -641,14 +631,31 @@ export default function App() {
               {activeTab === 'MATCHES' && (
                 <div className="space-y-6">
                   {player && (
-                    <OutrightPredictions
-                      playerPhone={player.phoneNumber}
-                      matches={matches}
-                      serverTime={serverTime}
-                      onNotify={notify}
-                      onRefresh={refreshData}
-                      leaderboardEntry={leaderboard.find(l => l.name === player.name)}
-                    />
+                    <div className="space-y-4">
+                      <div className="flex justify-end select-none">
+                        <button
+                          type="button"
+                          onClick={() => setShowOutrightsPanel(!showOutrightsPanel)}
+                          className={`px-4 py-2 rounded-2xl border text-xs font-bold transition duration-200 cursor-pointer flex items-center gap-1.5 ${
+                            showOutrightsPanel
+                              ? 'bg-amber-500/15 text-amber-400 border-amber-500/25'
+                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
+                          }`}
+                        >
+                          <span>🎯 {showOutrightsPanel ? 'ẨN ĐẤU TRƯỜNG CHUNG CUỘC' : 'HIỆN ĐẤU TRƯỜNG CHUNG CUỘC'}</span>
+                        </button>
+                      </div>
+                      {showOutrightsPanel && (
+                        <OutrightPredictions
+                          playerPhone={player.phoneNumber}
+                          matches={matches}
+                          serverTime={serverTime}
+                          onNotify={notify}
+                          onRefresh={refreshData}
+                          leaderboardEntry={leaderboard.find(l => l.name === player.name)}
+                        />
+                      )}
+                    </div>
                   )}
                   <MatchList
                     matches={matches}

@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { LeaderboardEntry } from '../types';
-import { Award, BarChart3, TrendingUp, CheckCircle2, RefreshCw, History } from 'lucide-react';
+import { Award, BarChart3, TrendingUp, CheckCircle2, RefreshCw, History, Zap } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -86,9 +86,14 @@ export default function StatsDashboard({
     points: number;
     evaluated: boolean;
     matchStatus: string;
+    matchTime?: string | null;
   }[]>([]);
   const [loadingHistory, setLoadingHistory] = React.useState(false);
   const [historySearch, setHistorySearch] = React.useState('');
+
+  // Pagination for User History table
+  const [historyPage, setHistoryPage] = React.useState(1);
+  const historyPageSize = 8;
 
   const fetchPredictionsHistory = async () => {
     setLoadingHistory(true);
@@ -127,6 +132,84 @@ export default function StatsDashboard({
       h.matchId.includes(query)
     );
   });
+
+  // Calculate: Vua nhảy tàu (Last-minute predictors Top 3)
+  const lastMinuteLeaderboard = React.useMemo(() => {
+    const playersMap: Record<string, {
+      name: string;
+      phone: string;
+      leapCount: number;
+      gaps: number[];
+    }> = {};
+
+    historyList.forEach(h => {
+      if (!h.votedAt || !h.matchTime) return;
+      const voteTime = new Date(h.votedAt).getTime();
+      const matchStart = new Date(h.matchTime).getTime();
+      const cutoff = matchStart + 15 * 60 * 1000; // 15 mins lock limit
+      
+      const gap = cutoff - voteTime; // in ms
+      
+      // If valid prediction (before/at cutoff) and within 25 minutes of lock time
+      // (This covers 10 minutes before kickoff to 15 minutes after kickoff)
+      if (gap >= 0 && gap <= 25 * 60 * 1000) {
+        const key = h.playerName + h.playerPhone;
+        if (!playersMap[key]) {
+          playersMap[key] = {
+            name: h.playerName,
+            phone: h.playerPhone,
+            leapCount: 0,
+            gaps: []
+          };
+        }
+        playersMap[key].leapCount += 1;
+        playersMap[key].gaps.push(gap);
+      }
+    });
+
+    const list = Object.values(playersMap).map(p => {
+      const avgGapMs = p.gaps.length > 0
+        ? p.gaps.reduce((sum, g) => sum + g, 0) / p.gaps.length
+        : 0;
+      
+      const avgGapMinutes = avgGapMs / (60 * 1000);
+
+      return {
+        name: p.name,
+        phone: p.phone,
+        leapCount: p.leapCount,
+        avgGapMinutes: parseFloat(avgGapMinutes.toFixed(1))
+      };
+    });
+
+    // Sort by leapCount desc, then avgGapMinutes asc (smaller gap is closer to locking time)
+    return list
+      .sort((a, b) => {
+        if (b.leapCount !== a.leapCount) {
+          return b.leapCount - a.leapCount;
+        }
+        return a.avgGapMinutes - b.avgGapMinutes;
+      })
+      .slice(0, 3);
+  }, [historyList]);
+
+  // History pagination slicing
+  const totalHistoryCount = filteredHistory.length;
+  const totalHistoryPages = Math.max(1, Math.ceil(totalHistoryCount / historyPageSize));
+  const historyStartIndex = (historyPage - 1) * historyPageSize;
+  const paginatedHistory = filteredHistory.slice(historyStartIndex, historyStartIndex + historyPageSize);
+
+  // Auto adjustment for historyPage out-of-bounds
+  React.useEffect(() => {
+    if (historyPage > totalHistoryPages) {
+      setHistoryPage(totalHistoryPages);
+    }
+  }, [totalHistoryPages, historyPage]);
+
+  // Reset page when filter changes
+  React.useEffect(() => {
+    setHistoryPage(1);
+  }, [historySearch]);
 
   return (
     <div id="stats-dashboard-container" className="space-y-6">
@@ -175,6 +258,61 @@ export default function StatsDashboard({
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tỉ Lệ Đúng</h3>
             <div className="text-2xl font-black text-slate-100 font-mono mt-0.5">{averageAccuracy}%</div>
           </div>
+        </div>
+      </div>
+
+      {/* Vua Nhảy Tàu (Last-Minute Predictors Top 3) */}
+      <div id="vua-nhay-tau-banner" className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden group hover:border-slate-700/60 transition duration-300">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl group-hover:bg-amber-500/10 transition-all duration-500 -mr-20 -mt-20 pointer-events-none"></div>
+        
+        <div className="flex items-center space-x-3 mb-5 border-b border-slate-800 pb-3">
+          <div className="p-2.5 bg-amber-500/10 rounded-2xl text-amber-400">
+            <Zap className="w-5 h-5 text-amber-400 animate-bounce" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-slate-100 uppercase tracking-wider">
+              Danh Hiệu Vua Nhảy Tàu 🚄 (Top 3)
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">Dành cho các chiến thần dự đoán sát nút giờ đóng cổng bình chọn nhất (T + 15 phút).</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {lastMinuteLeaderboard.length === 0 ? (
+            <div className="md:col-span-3 text-center py-6 text-slate-500 text-xs italic">
+              Chưa đủ dữ liệu dự đoán để phân định danh hiệu hoặc chưa trận nào diễn ra.
+            </div>
+          ) : (
+            lastMinuteLeaderboard.map((item, idx) => {
+              const medalColors = [
+                'from-yellow-400/20 to-amber-500/10 text-yellow-400 border-yellow-500/30' + ' shadow-yellow-500/5',
+                'from-slate-300/20 to-slate-400/10 text-slate-200 border-slate-400/30 shadow-slate-400/5',
+                'from-amber-600/20 to-amber-700/10 text-amber-500 border-amber-600/30 shadow-amber-600/5'
+              ];
+              const medals = ['🥇 Quán Quân', '🥈 Á Quân', '🥉 Hạng Ba'];
+              return (
+                <div 
+                  key={idx} 
+                  className={`bg-gradient-to-br ${medalColors[idx]} border rounded-2xl p-4 flex flex-col justify-between hover:scale-[1.02] transition duration-250 shadow-md`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-black uppercase tracking-wider font-mono bg-slate-950/40 px-2.5 py-1 rounded-full">{medals[idx]}</span>
+                    <span className="text-xs font-mono font-black opacity-80">#{idx + 1}</span>
+                  </div>
+                  
+                  <div className="mb-2">
+                    <div className="font-bold text-slate-100/90 text-sm">{item.name}</div>
+                    <div className="text-[10px] font-mono text-slate-400 mt-0.5">Số lần nhảy tàu: <span className="font-bold text-slate-200">{item.leapCount} trận</span></div>
+                  </div>
+
+                  <div className="border-t border-slate-800/40 pt-2.5 mt-2 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Sát giờ tb:</span>
+                    <span className="font-mono font-black text-amber-400 bg-slate-950/60 px-2 py-0.5 rounded-md border border-slate-850">{item.avgGapMinutes} phút</span>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -353,7 +491,7 @@ export default function StatsDashboard({
                     <td colSpan={5} className="py-12 text-center text-slate-500 italic">Không có lịch sử bình chọn nào khớp.</td>
                   </tr>
                 ) : (
-                  filteredHistory.map((h, idx) => {
+                  paginatedHistory.map((h, idx) => {
                     const formattedDate = h.votedAt 
                       ? new Date(h.votedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
                       : '(chưa rõ thời gian)';
@@ -402,6 +540,52 @@ export default function StatsDashboard({
             </table>
           </div>
         </div>
+
+        {/* Dynamic Pagination Controls */}
+        {totalHistoryPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-800 pt-4 gap-3 text-[11px] pb-1 select-none">
+            <span className="text-slate-400 font-sans leading-relaxed text-center sm:text-left">
+              Hiển thị <span className="text-slate-200 font-bold">{(historyPage - 1) * historyPageSize + 1} - {Math.min(historyPage * historyPageSize, totalHistoryCount)}</span> trong tổng số <span className="text-slate-200 font-bold">{totalHistoryCount}</span> lượt đoán
+            </span>
+            <div className="flex items-center space-x-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setHistoryPage(1)}
+                disabled={historyPage === 1}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-850 text-[10px] font-semibold border border-slate-850 text-slate-400 hover:text-slate-200 disabled:opacity-40 hover:disabled:text-slate-400 active:scale-95 transition cursor-pointer select-none"
+              >
+                Đầu
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoryPage((prev) => Math.max(1, prev - 1))}
+                disabled={historyPage === 1}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-850 text-[10px] font-semibold border border-slate-850 text-slate-400 hover:text-slate-200 disabled:opacity-40 hover:disabled:text-slate-400 active:scale-95 transition cursor-pointer select-none"
+              >
+                Trước
+              </button>
+              <span className="font-mono font-bold text-slate-300 bg-slate-900 border border-slate-850 py-1.5 px-3 rounded-lg text-center min-w-16">
+                P. {historyPage} / {totalHistoryPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setHistoryPage((prev) => Math.min(totalHistoryPages, prev + 1))}
+                disabled={historyPage === totalHistoryPages}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-850 text-[10px] font-semibold border border-slate-850 text-slate-400 hover:text-slate-200 disabled:opacity-40 hover:disabled:text-slate-450 active:scale-95 transition cursor-pointer select-none"
+              >
+                Sau
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoryPage(totalHistoryPages)}
+                disabled={historyPage === totalHistoryPages}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-850 text-[10px] font-semibold border border-slate-850 text-slate-400 hover:text-slate-200 disabled:opacity-40 hover:disabled:text-slate-450 active:scale-95 transition cursor-pointer select-none"
+              >
+                Cuối
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
