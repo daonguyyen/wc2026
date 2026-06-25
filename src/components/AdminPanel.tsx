@@ -36,6 +36,11 @@ export default function AdminPanel({
   const [awayTeamInput, setAwayTeamInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showDemoConfirm, setShowDemoConfirm] = useState(false);
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false);
+  const [bulkVisibilityAction, setBulkVisibilityAction] = useState<'SHOW' | 'HIDE' | null>(null);
+  const [confirmRestoreFilename, setConfirmRestoreFilename] = useState<string | null>(null);
+  const [confirmDeleteFilename, setConfirmDeleteFilename] = useState<string | null>(null);
 
   // States for player reading
   const [playersList, setPlayersList] = useState<{ name: string; code: string; score: number; createdAt: string }[]>([]);
@@ -162,7 +167,6 @@ export default function AdminPanel({
   // Restore server backup
   const handleRestoreBackup = async (filename: string) => {
     if (!adminCode || !filename) return;
-    if (!window.confirm(`Bạn có chắc muốn khôi phục dữ liệu từ bản sao lưu "${filename}" không? Toàn bộ điểm số hiện tại sẽ bị ghi đè.`)) return;
     setIsLoading(true);
     try {
       const res = await fetch('/api/admin/backups/restore', {
@@ -193,7 +197,6 @@ export default function AdminPanel({
   // Delete server backup
   const handleDeleteBackup = async (filename: string) => {
     if (!adminCode || !filename) return;
-    if (!window.confirm(`Bạn có chắc muốn xóa bản sao lưu "${filename}" không?`)) return;
     setIsLoading(true);
     try {
       const res = await fetch('/api/admin/backups/delete', {
@@ -788,25 +791,85 @@ export default function AdminPanel({
             </div>
 
             <div className="space-y-2.5">
-              <button
-                type="button"
-                onClick={handleGenerateDemo}
-                disabled={isLoading}
-                className="w-full bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/45 text-xs font-bold py-3 px-4 rounded-xl transition flex items-center justify-center space-x-2 shadow-sm cursor-pointer active:scale-98"
-              >
-                <UserPlus className="w-4 h-4 shrink-0" />
-                <span>Nạp 10 người chơi ảo & 150+ dự đoán mẫu</span>
-              </button>
+              {!showDemoConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDemoConfirm(true);
+                    setShowSyncConfirm(false);
+                  }}
+                  disabled={isLoading}
+                  className="w-full bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/45 text-xs font-bold py-3 px-4 rounded-xl transition flex items-center justify-center space-x-2 shadow-sm cursor-pointer active:scale-98"
+                >
+                  <UserPlus className="w-4 h-4 shrink-0" />
+                  <span>Nạp 10 người chơi ảo & 150+ dự đoán mẫu</span>
+                </button>
+              ) : (
+                <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl p-3 space-y-2.5 text-center animate-fade-in">
+                  <p className="text-[11px] text-emerald-400 font-bold leading-normal">
+                    Xác nhận tạo 10 người chơi ảo & 150+ dự đoán mẫu? Điều này sẽ thêm người dùng ảo vào BXH.
+                  </p>
+                  <div className="flex gap-2 justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowDemoConfirm(false)}
+                      className="bg-slate-900 hover:bg-slate-850 text-slate-300 text-[10px] px-3 py-1.5 rounded-lg border border-slate-800 font-bold transition cursor-pointer"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleGenerateDemo();
+                        setShowDemoConfirm(false);
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-bold transition cursor-pointer"
+                    >
+                      Xác nhận
+                    </button>
+                  </div>
+                </div>
+              )}
 
-              <button
-                type="button"
-                onClick={handleSyncAPI}
-                disabled={isLoading}
-                className="w-full bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/25 hover:border-blue-500/45 text-xs font-bold py-3 px-4 rounded-xl transition flex items-center justify-center space-x-2 shadow-sm cursor-pointer active:scale-98"
-              >
-                <RefreshCw className={`w-4 h-4 shrink-0 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>Đồng bộ tỉ số & kết quả live từ API (worldcup26.ir)</span>
-              </button>
+              {!showSyncConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSyncConfirm(true);
+                    setShowDemoConfirm(false);
+                  }}
+                  disabled={isLoading}
+                  className="w-full bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/25 hover:border-blue-500/45 text-xs font-bold py-3 px-4 rounded-xl transition flex items-center justify-center space-x-2 shadow-sm cursor-pointer active:scale-98"
+                >
+                  <RefreshCw className={`w-4 h-4 shrink-0 ${isLoading ? 'animate-spin' : ''}`} />
+                  <span>Đồng bộ tỉ số & kết quả live từ API (worldcup26.ir)</span>
+                </button>
+              ) : (
+                <div className="bg-blue-950/20 border border-blue-500/20 rounded-xl p-3 space-y-2.5 text-center animate-fade-in">
+                  <p className="text-[11px] text-blue-400 font-bold leading-normal">
+                    Xác nhận đồng bộ tỉ số từ API? Kết quả các trận đấu chính thức sẽ được cập nhật trực tiếp.
+                  </p>
+                  <div className="flex gap-2 justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowSyncConfirm(false)}
+                      className="bg-slate-900 hover:bg-slate-850 text-slate-300 text-[10px] px-3 py-1.5 rounded-lg border border-slate-800 font-bold transition cursor-pointer"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSyncAPI();
+                        setShowSyncConfirm(false);
+                      }}
+                      className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-bold transition cursor-pointer"
+                    >
+                      Xác nhận đồng bộ
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {!showResetConfirm ? (
                 <button
@@ -963,28 +1026,86 @@ export default function AdminPanel({
         </p>
 
         {/* Bulk toggle bar */}
-        <div className="flex flex-col sm:flex-row gap-2.5 items-center justify-between bg-slate-950/40 p-4 rounded-2xl border border-slate-850">
-          <div className="text-[11px] text-slate-450 font-sans leading-normal">
-            💡 <strong>Cài đặt hiển thị nhanh:</strong> Bật cho phép hiển thị ra hoặc ẩn toàn bộ lạt trận theo dõi của người chơi.
+        <div className="bg-slate-950/40 p-4 rounded-2xl border border-slate-850 space-y-3">
+          <div className="flex flex-col sm:flex-row gap-2.5 items-center justify-between">
+            <div className="text-[11px] text-slate-450 font-sans leading-normal">
+              💡 <strong>Cài đặt hiển thị nhanh:</strong> Bật cho phép hiển thị ra hoặc ẩn toàn bộ lạt trận theo dõi của người chơi.
+            </div>
+            {bulkVisibilityAction === null && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => setBulkVisibilityAction('SHOW')}
+                  className="bg-emerald-900/20 hover:bg-emerald-800/25 text-emerald-400 border border-emerald-500/10 px-3.5 py-2 rounded-xl text-[10px] font-black transition cursor-pointer active:scale-95 shrink-0"
+                >
+                  👁️ HIỆN TOÀN BỘ TRẬN ĐẤU (104)
+                </button>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => setBulkVisibilityAction('HIDE')}
+                  className="bg-slate-900 hover:bg-slate-850 text-slate-400 border border-slate-800 px-3.5 py-2 rounded-xl text-[10px] font-black transition cursor-pointer active:scale-95 shrink-0"
+                >
+                  👁️‍ CẮT ẨN TOÀN BỘ TRẬN ĐẤU
+                </button>
+              </div>
+            )}
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={() => handleBulkVisibility(true)}
-              className="bg-emerald-900/20 hover:bg-emerald-800/25 text-emerald-400 border border-emerald-500/10 px-3.5 py-2 rounded-xl text-[10px] font-black transition cursor-pointer active:scale-95 shrink-0"
-            >
-              👁️ HIỆN TOÀN BỘ TRẬN ĐẤU (104)
-            </button>
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={() => handleBulkVisibility(false)}
-              className="bg-slate-900 hover:bg-slate-850 text-slate-400 border border-slate-800 px-3.5 py-2 rounded-xl text-[10px] font-black transition cursor-pointer active:scale-95 shrink-0"
-            >
-              👁️‍CẮT ẨN TOÀN BỘ TRẬN ĐẤU
-            </button>
-          </div>
+
+          {bulkVisibilityAction === 'SHOW' && (
+            <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl p-3 text-center space-y-2 animate-fade-in">
+              <p className="text-[11.5px] text-emerald-400 font-bold">
+                Bạn có chắc chắn muốn HIỆN toàn bộ 104 trận đấu ra màn hình chính của người chơi?
+              </p>
+              <div className="flex justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBulkVisibilityAction(null)}
+                  className="bg-slate-900 hover:bg-slate-850 text-slate-300 text-[10.5px] font-bold px-3 py-1.5 rounded-lg border border-slate-850 cursor-pointer transition"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleBulkVisibility(true);
+                    setBulkVisibilityAction(null);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10.5px] font-bold px-3 py-1.5 rounded-lg cursor-pointer transition shadow-md shadow-emerald-600/10"
+                >
+                  Xác nhận hiện toàn bộ
+                </button>
+              </div>
+            </div>
+          )}
+
+          {bulkVisibilityAction === 'HIDE' && (
+            <div className="bg-rose-955/25 border border-rose-500/30 rounded-xl p-3.5 text-center space-y-2.5 animate-fade-in">
+              <p className="text-[11.5px] text-rose-400 font-black leading-relaxed">
+                ⚠️ CẢNH BÁO: Bạn có chắc muốn ẨN toàn bộ 104 trận đấu? Hành động này sẽ làm toàn bộ danh sách (kể cả các trận có tỉ số và đã xong) biến mất hoàn toàn khỏi màn hình người chơi!
+              </p>
+              <div className="flex justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBulkVisibilityAction(null)}
+                  className="bg-slate-900 hover:bg-slate-850 text-slate-300 text-[10.5px] font-bold px-3 py-1.5 rounded-lg border border-slate-850 cursor-pointer transition"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleBulkVisibility(false);
+                    setBulkVisibilityAction(null);
+                  }}
+                  className="bg-rose-600 hover:bg-rose-500 text-white text-[10.5px] font-bold px-3 py-1.5 rounded-lg cursor-pointer transition shadow-md shadow-rose-600/15"
+                >
+                  Tôi biết, xác nhận ẩn tất cả
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Dense Bento Table list */}
@@ -1515,21 +1636,73 @@ export default function AdminPanel({
                             {(b.size / 1024).toFixed(1)} KB
                           </td>
                           <td className="py-2.5 px-3 text-right space-x-1 font-sans">
-                            <button 
-                              type="button"
-                              onClick={() => handleRestoreBackup(b.filename)}
-                              className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-[10.5px] font-black py-1 px-2.5 rounded hover:text-emerald-300 transition cursor-pointer border border-emerald-500/10"
-                            >
-                              Khôi phục
-                            </button>
-                            <button 
-                              type="button"
-                              onClick={() => handleDeleteBackup(b.filename)}
-                              className="bg-rose-600/15 hover:bg-rose-600/25 text-rose-455 text-[10.5px] font-black py-1 px-2 rounded hover:text-rose-400 transition cursor-pointer"
-                              title="Xóa bản ghi này"
-                            >
-                              Xóa
-                            </button>
+                            {confirmRestoreFilename === b.filename ? (
+                              <div className="flex items-center gap-1.5 justify-end">
+                                <span className="text-[10px] text-emerald-450 font-bold">Ghi đè & Khôi phục?</span>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    handleRestoreBackup(b.filename);
+                                    setConfirmRestoreFilename(null);
+                                  }}
+                                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-[9.5px] font-black py-0.5 px-2 rounded cursor-pointer active:scale-95 transition"
+                                >
+                                  Có
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => setConfirmRestoreFilename(null)}
+                                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 text-[9.5px] font-bold py-0.5 px-1.5 rounded border border-slate-700 cursor-pointer"
+                                >
+                                  Hủy
+                                </button>
+                              </div>
+                            ) : confirmDeleteFilename === b.filename ? (
+                              <div className="flex items-center gap-1.5 justify-end">
+                                <span className="text-[10px] text-rose-400 font-bold">Xác nhận xóa?</span>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    handleDeleteBackup(b.filename);
+                                    setConfirmDeleteFilename(null);
+                                  }}
+                                  className="bg-rose-600 hover:bg-rose-500 text-white text-[9.5px] font-black py-0.5 px-2 rounded cursor-pointer active:scale-95 transition"
+                                >
+                                  Xóa
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => setConfirmDeleteFilename(null)}
+                                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 text-[9.5px] font-bold py-0.5 px-1.5 rounded border border-slate-700 cursor-pointer"
+                                >
+                                  Hủy
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    setConfirmRestoreFilename(b.filename);
+                                    setConfirmDeleteFilename(null);
+                                  }}
+                                  className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-[10.5px] font-black py-1 px-2.5 rounded hover:text-emerald-300 transition cursor-pointer border border-emerald-500/10"
+                                >
+                                  Khôi phục
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    setConfirmDeleteFilename(b.filename);
+                                    setConfirmRestoreFilename(null);
+                                  }}
+                                  className="bg-rose-600/15 hover:bg-rose-600/25 text-rose-455 text-[10.5px] font-black py-1 px-2 rounded hover:text-rose-400 transition cursor-pointer"
+                                  title="Xóa bản ghi này"
+                                >
+                                  Xóa
+                                </button>
+                              </>
+                            )}
                           </td>
                         </tr>
                       ))
