@@ -252,7 +252,8 @@ export default function MatchList({
       const predKey = `${playerPhone}_${m.id}`;
       const hasPred = !!predictions[predKey];
       const matchTime = new Date(m.matchTime);
-      const isLocked = now > new Date(matchTime.getTime() + 15 * 60 * 1000);
+      const limitMinutes = m.stage.startsWith('Vòng bảng') ? 15 : 7;
+      const isLocked = now > new Date(matchTime.getTime() + limitMinutes * 60 * 1000);
 
       if (predictionTypeFilter === 'VOTED' && !hasPred) return false;
       if (predictionTypeFilter === 'NOT_VOTED' && hasPred) return false;
@@ -334,7 +335,8 @@ export default function MatchList({
   // Calculate timing status of a match
   const getMatchTimeStatus = (m: Match) => {
     const matchTime = new Date(m.matchTime);
-    const lockTime = new Date(matchTime.getTime() + 15 * 60 * 1000); // T + 15'
+    const limitMinutes = m.stage.startsWith('Vòng bảng') ? 15 : 7;
+    const lockTime = new Date(matchTime.getTime() + limitMinutes * 60 * 1000);
     
     if (m.status === 'FINISHED') {
       return { label: 'Kết thúc', style: 'bg-slate-800 text-slate-400 border-slate-750', value: 'FINISHED' };
@@ -345,9 +347,9 @@ export default function MatchList({
     }
 
     if (now > matchTime) {
-      // Within first 15 minutes of match start!
+      // Within first limitMinutes of match start!
       const elapsedMins = Math.floor((now.getTime() - matchTime.getTime()) / 60000);
-      const remainingMins = 15 - elapsedMins;
+      const remainingMins = limitMinutes - elapsedMins;
       return {
         label: `Đang đá (Phút ${elapsedMins}') - Còn ${remainingMins} phút để khoá`,
         style: 'bg-amber-500/15 text-amber-400 border-amber-500/20 animate-pulse font-semibold',
@@ -473,7 +475,7 @@ export default function MatchList({
         <div>
           <span className="font-bold text-amber-400">LUẬT BÌNH CHỌN: </span>
           Mỗi dự đoán <span className="text-rose-405 font-bold">Sai hoặc Quên dự đoán</span> nhận <span className="text-rose-400 font-bold">+1 điểm</span> (đoán Đúng nhận <span className="text-emerald-400 font-bold">0 điểm</span>, ít điểm nhất thắng cuộc). 
-          Khung giờ bình chọn chỉ mở hợp pháp trước trận đấu và kéo dài đúng <strong>15 phút đầu tiên</strong> (T + 15') kể từ lúc bóng lăn. 
+          Cổng bình chọn mở trước trận và kéo dài đúng <strong>15 phút đầu</strong> với Vòng bảng, hoặc <strong>7 phút đầu</strong> kể từ Vòng 32 trở đi. 
           Quá thời gian trên cổng bình chọn hoặc chỉnh sửa sẽ <span className="text-rose-400 font-semibold border-b border-rose-455/30">bị khóa vĩnh viễn 🔒</span> và ai quên không bầu cũng bị cộng thêm 1 điểm.
         </div>
       </div>

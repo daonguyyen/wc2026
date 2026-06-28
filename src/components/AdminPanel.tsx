@@ -161,6 +161,19 @@ function getMatchHandicap(matchOrHomeTeam?: any, awayTeamStr?: string): { favore
   return { favored, value };
 }
 
+const toDatetimeLocal = (isoString: string): string => {
+  if (!isoString) return '';
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return '';
+    const tzOffset = date.getTimezoneOffset() * 60000; // offset in milliseconds
+    const localISOTime = new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+    return localISOTime;
+  } catch (e) {
+    return '';
+  }
+};
+
 interface AdminPanelProps {
   matches: Match[];
   currentTime: string;
@@ -1339,11 +1352,22 @@ export default function AdminPanel({
                       <td className="py-4 px-4">
                         {isBeingEdited ? (
                           <input
-                            type="text"
-                            value={matchupTimeInput}
-                            onChange={(e) => setMatchupTimeInput(e.target.value)}
+                            type="datetime-local"
+                            value={toDatetimeLocal(matchupTimeInput)}
+                            onChange={(e) => {
+                              const localVal = e.target.value;
+                              if (localVal) {
+                                try {
+                                  const isoVal = new Date(localVal).toISOString();
+                                  setMatchupTimeInput(isoVal);
+                                } catch (err) {
+                                  setMatchupTimeInput(localVal);
+                                }
+                              } else {
+                                setMatchupTimeInput('');
+                              }
+                            }}
                             className="bg-slate-900 border border-slate-750 text-slate-200 rounded px-2 py-1 text-xs w-44 font-mono focus:outline-none focus:border-indigo-500"
-                            placeholder="YYYY-MM-DDTHH:MM:SSZ"
                           />
                         ) : (
                           <span className="text-xs text-slate-400 font-mono">
