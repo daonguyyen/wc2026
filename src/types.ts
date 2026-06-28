@@ -13,7 +13,7 @@ export interface Player {
 export interface Prediction {
   playerPhone: string;
   matchId: string;
-  prediction: 'HOME' | 'DRAW' | 'AWAY';
+  prediction: "HOME" | "DRAW" | "AWAY";
   votedAt: string;
   points: number;
   evaluated: boolean;
@@ -24,12 +24,14 @@ export interface Match {
   homeTeam: string;
   awayTeam: string;
   matchTime: string; // ISO String (e.g., "2026-06-11T20:00:00Z")
-  status: 'SCHEDULED' | 'LIVE' | 'FINISHED';
+  status: "SCHEDULED" | "LIVE" | "FINISHED";
   homeScore?: number;
   awayScore?: number;
-  winner?: 'HOME' | 'DRAW' | 'AWAY';
+  winner?: "HOME" | "DRAW" | "AWAY";
   stage: string; // "Vòng bảng - Bảng A", "Vòng 32", "Vòng 16", "Tứ kết", "Bán kết", "Chung kết"
   visible?: boolean;
+  handicapFavored?: "HOME" | "AWAY" | "NONE";
+  handicapValue?: number;
 }
 
 export interface MatchOdds {

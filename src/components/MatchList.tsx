@@ -111,14 +111,61 @@ const TEAM_RATINGS: Record<string, number> = {
   "Panama": 4
 };
 
-function getMatchHandicap(homeTeam?: string, awayTeam?: string): { favored: 'HOME' | 'AWAY' | 'NONE'; value: number } {
-  if (!homeTeam || !awayTeam || homeTeam === 'Chưa xác định' || awayTeam === 'Chưa xác định') {
+function getMatchHandicap(matchOrHomeTeam?: any, awayTeamStr?: string): { favored: 'HOME' | 'AWAY' | 'NONE'; value: number } {
+  if (!matchOrHomeTeam) {
     return { favored: 'NONE', value: 0 };
   }
-  const homeRating = TEAM_RATINGS[homeTeam] !== undefined ? TEAM_RATINGS[homeTeam] : 6;
-  const awayRating = TEAM_RATINGS[awayTeam] !== undefined ? TEAM_RATINGS[awayTeam] : 6;
+
+  // If passing string arguments
+  if (typeof matchOrHomeTeam === 'string') {
+    const homeTeam = matchOrHomeTeam;
+    const awayTeam = awayTeamStr;
+    if (!homeTeam || !awayTeam || homeTeam === 'Chưa xác định' || awayTeam === 'Chưa xác định') {
+      return { favored: 'NONE', value: 0 };
+    }
+    const homeRating = TEAM_RATINGS[homeTeam] !== undefined ? TEAM_RATINGS[homeTeam] : 6;
+    const awayRating = TEAM_RATINGS[awayTeam] !== undefined ? TEAM_RATINGS[awayTeam] : 6;
+    
+    const diff = homeRating - awayRating;
+    if (diff === 0) {
+      return { favored: 'NONE', value: 0 };
+    }
+    
+    const favored = diff > 0 ? 'HOME' : 'AWAY';
+    const absDiff = Math.abs(diff);
+    
+    let value = 0;
+    if (absDiff === 1 || absDiff === 2) {
+      value = 0.5;
+    } else if (absDiff === 3 || absDiff === 4) {
+      value = 1.0;
+    } else if (absDiff === 5 || absDiff === 6) {
+      value = 1.5;
+    } else if (absDiff >= 7) {
+      value = 2.0;
+    }
+    
+    return { favored, value };
+  }
+
+  // If passing a Match object
+  const m = matchOrHomeTeam;
+  if (m.handicapFavored && m.handicapFavored !== undefined) {
+    return {
+      favored: m.handicapFavored as 'HOME' | 'AWAY' | 'NONE',
+      value: m.handicapValue !== undefined ? m.handicapValue : 0
+    };
+  }
+
+  const h = m.homeTeam;
+  const a = m.awayTeam;
+  if (!h || !a || h === 'Chưa xác định' || a === 'Chưa xác định') {
+    return { favored: 'NONE', value: 0 };
+  }
+  const hRating = TEAM_RATINGS[h] !== undefined ? TEAM_RATINGS[h] : 6;
+  const aRating = TEAM_RATINGS[a] !== undefined ? TEAM_RATINGS[a] : 6;
   
-  const diff = homeRating - awayRating;
+  const diff = hRating - aRating;
   if (diff === 0) {
     return { favored: 'NONE', value: 0 };
   }
@@ -140,12 +187,23 @@ function getMatchHandicap(homeTeam?: string, awayTeam?: string): { favored: 'HOM
   return { favored, value };
 }
 
-function getHandicapText(homeTeam?: string, awayTeam?: string): string {
-  const { favored, value } = getMatchHandicap(homeTeam, awayTeam);
+function getHandicapText(matchOrHomeTeam?: any, awayTeam?: string): string {
+  const { favored, value } = getMatchHandicap(matchOrHomeTeam, awayTeam);
   if (favored === 'NONE' || value === 0) {
     return 'Đồng banh (0)';
   }
-  const favTeam = favored === 'HOME' ? homeTeam || 'Đội nhà' : awayTeam || 'Đội khách';
+  
+  let homeName = '';
+  let awayName = '';
+  if (typeof matchOrHomeTeam === 'string') {
+    homeName = matchOrHomeTeam;
+    awayName = awayTeam || '';
+  } else if (matchOrHomeTeam) {
+    homeName = matchOrHomeTeam.homeTeam || '';
+    awayName = matchOrHomeTeam.awayTeam || '';
+  }
+
+  const favTeam = favored === 'HOME' ? homeName || 'Đội nhà' : awayName || 'Đội khách';
   const shortFavTeamName = favTeam.replace(/\(.*?\)/g, '').trim();
   return `${shortFavTeamName} chấp ${value}`;
 }
@@ -194,7 +252,8 @@ export default function MatchList({
       const predKey = `${playerPhone}_${m.id}`;
       const hasPred = !!predictions[predKey];
       const matchTime = new Date(m.matchTime);
-      const isLocked = now > new Date(matchTime.getTime() + 15 * 60 * 1000);
+      const limitMinutes = m.stage.startsWith('Vòng bảng') ? 15 : 7;
+      const isLocked = now > new Date(matchTime.getTime() + limitMinutes * 60 * 1000);
 
       if (predictionTypeFilter === 'VOTED' && !hasPred) return false;
       if (predictionTypeFilter === 'NOT_VOTED' && hasPred) return false;
@@ -276,7 +335,8 @@ export default function MatchList({
   // Calculate timing status of a match
   const getMatchTimeStatus = (m: Match) => {
     const matchTime = new Date(m.matchTime);
-    const lockTime = new Date(matchTime.getTime() + 15 * 60 * 1000); // T + 15'
+    const limitMinutes = m.stage.startsWith('Vòng bảng') ? 15 : 7;
+    const lockTime = new Date(matchTime.getTime() + limitMinutes * 60 * 1000);
     
     if (m.status === 'FINISHED') {
       return { label: 'Kết thúc', style: 'bg-slate-800 text-slate-400 border-slate-750', value: 'FINISHED' };
@@ -287,9 +347,9 @@ export default function MatchList({
     }
 
     if (now > matchTime) {
-      // Within first 15 minutes of match start!
+      // Within first limitMinutes of match start!
       const elapsedMins = Math.floor((now.getTime() - matchTime.getTime()) / 60000);
-      const remainingMins = 15 - elapsedMins;
+      const remainingMins = limitMinutes - elapsedMins;
       return {
         label: `Đang đá (Phút ${elapsedMins}') - Còn ${remainingMins} phút để khoá`,
         style: 'bg-amber-500/15 text-amber-400 border-amber-500/20 animate-pulse font-semibold',
@@ -415,7 +475,7 @@ export default function MatchList({
         <div>
           <span className="font-bold text-amber-400">LUẬT BÌNH CHỌN: </span>
           Mỗi dự đoán <span className="text-rose-405 font-bold">Sai hoặc Quên dự đoán</span> nhận <span className="text-rose-400 font-bold">+1 điểm</span> (đoán Đúng nhận <span className="text-emerald-400 font-bold">0 điểm</span>, ít điểm nhất thắng cuộc). 
-          Khung giờ bình chọn chỉ mở hợp pháp trước trận đấu và kéo dài đúng <strong>15 phút đầu tiên</strong> (T + 15') kể từ lúc bóng lăn. 
+          Cổng bình chọn mở trước trận và kéo dài đúng <strong>15 phút đầu</strong> với Vòng bảng, hoặc <strong>7 phút đầu</strong> kể từ Vòng 32 trở đi. 
           Quá thời gian trên cổng bình chọn hoặc chỉnh sửa sẽ <span className="text-rose-400 font-semibold border-b border-rose-455/30">bị khóa vĩnh viễn 🔒</span> và ai quên không bầu cũng bị cộng thêm 1 điểm.
         </div>
       </div>
@@ -507,7 +567,7 @@ export default function MatchList({
 
                       <div className="text-[9px] text-amber-400 font-bold flex items-center space-x-1.5 bg-amber-500/10 px-2.5 py-1 rounded border border-amber-500/20 select-none shadow whitespace-nowrap">
                         <span>⚽</span>
-                        <span>{getHandicapText(m.homeTeam, m.awayTeam)}</span>
+                        <span>{getHandicapText(m)}</span>
                       </div>
                     </div>
 
@@ -684,7 +744,7 @@ export default function MatchList({
               <thead>
                 <tr className="bg-slate-900 border-b border-slate-805 text-slate-400 uppercase tracking-wider font-extrabold text-[10px]">
                   <th className="py-3 px-4 text-center w-16">Mã</th>
-                  {/* <th className="py-3 px-4 w-36">Vòng đấu</th> */}
+                  <th className="py-3 px-4 w-36">Vòng đấu</th>
                   <th className="py-3 px-4 text-center min-w-[280px]">Cặp đấu & Tỉ số</th>
                   <th className="py-3 px-4 w-44">Kèo chấp</th>
                   <th className="py-3 px-4 w-44">Kèo thắng</th>
@@ -693,7 +753,7 @@ export default function MatchList({
               </thead>
               <tbody className="divide-y divide-slate-850">
                 {paginatedCompletedMatches.map((m) => {
-                  const handicapText = getHandicapText(m.homeTeam, m.awayTeam);
+                  const handicapText = getHandicapText(m);
                   const handicapWinnerName = m.winner === 'HOME' 
                     ? m.homeTeam 
                     : m.winner === 'AWAY' 
@@ -708,9 +768,9 @@ export default function MatchList({
                       <td className="py-3.5 px-4 text-center font-bold font-mono text-slate-400">
                         #{m.id}
                       </td>
-                      {/* <td className="py-3.5 px-4 font-semibold text-emerald-400">
+                      <td className="py-3.5 px-4 font-semibold text-emerald-400">
                         {m.stage}
-                      </td> */}
+                      </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center justify-center space-x-3">
                           <span className="text-slate-200 font-bold truncate max-w-[120px] text-right block w-24">

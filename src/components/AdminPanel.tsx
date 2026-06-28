@@ -10,6 +10,170 @@ import {
   ShieldAlert, Eye, EyeOff, Lock, Unlock, Users, Loader2, Download, Upload, History, Database, Trash2
 } from 'lucide-react';
 
+const TEAM_RATINGS: Record<string, number> = {
+  // Nhóm 1: Siêu cường (Rating 9-10)
+  "Pháp": 10,
+  "Anh": 10,
+  "Tây Ban Nha": 10,
+  "Argentina": 10,
+  "Brazil": 9.5,
+  "Đức": 9.5,
+  "Bồ Đào Nha": 9,
+  
+  // Nhóm 2: Ông lớn châu Âu & Nam Mỹ (Rating 8-8.5)
+  "Hà Lan": 8.5,
+  "Ý": 8.5,
+  "Bỉ": 8,
+  "Croatia": 8,
+  "Uruguay": 8,
+  "Colombia": 8,
+  
+  // Nhóm 3: Tiềm năng Thổ Nhĩ Kỳ, Ma-rốc, Nhật Bản, v.v. (Rating 7-7.5)
+  "Thụy Sĩ": 7.5,
+  "Đan Mạch": 7.5,
+  "Áo": 7.5,
+  "Thổ Nhĩ Kỳ": 7.5,
+  "Ma-rốc": 7.5,
+  "Nhật Bản": 7.5,
+  "Hàn Quốc": 7,
+  "Ukraina": 7,
+  "Mỹ": 7,
+  "Mexico": 7,
+  "Ecuador": 7,
+  "Senegal": 7,
+  "Iran": 7,
+  
+  // Nhóm 4: Trung bình khá (Rating 6-6.5)
+  "Úc": 6.5,
+  "Ả Rập Xê-út": 6.5,
+  "Canada": 6.5,
+  "Tunisia": 6,
+  "Ba Lan": 6,
+  "Thụy Điển": 6,
+  "Na Uy": 6,
+  "Slovakia": 6,
+  "Slovenia": 6,
+  "Cộng hòa Ireland": 6,
+  "CH Séc": 6,
+  "Hungary": 6,
+  "Romania": 6,
+  "Wales": 6,
+  "Peru": 6,
+  "Chile": 6,
+  "Paraguay": 6,
+  "Venezuela": 6,
+  "Ai Cập": 6,
+  "Nigeria": 6,
+  "Algeria": 6,
+  "Cameroon": 6,
+  "Ghana": 6,
+  "Bờ Biển Ngà": 6,
+  "Iraq": 6,
+  "Uzbekistan": 6,
+  "Qatar": 6,
+  "New Zealand": 6,
+  
+  // Nhóm 5: Đội lót đường (Rating 4-5)
+  "Nam Phi": 5,
+  "Honduras": 5,
+  "Haiti": 4.5,
+  "Bosnia & Herzegovina": 5,
+  "Jordan": 5,
+  "Cape Verde": 5,
+  "Curaçao": 5,
+  "CHDC Congo": 4,
+  "Panama": 4
+};
+
+function getMatchHandicap(matchOrHomeTeam?: any, awayTeamStr?: string): { favored: 'HOME' | 'AWAY' | 'NONE'; value: number } {
+  if (!matchOrHomeTeam) {
+    return { favored: 'NONE', value: 0 };
+  }
+
+  // If passing string arguments
+  if (typeof matchOrHomeTeam === 'string') {
+    const homeTeam = matchOrHomeTeam;
+    const awayTeam = awayTeamStr;
+    if (!homeTeam || !awayTeam || homeTeam === 'Chưa xác định' || awayTeam === 'Chưa xác định') {
+      return { favored: 'NONE', value: 0 };
+    }
+    const homeRating = TEAM_RATINGS[homeTeam] !== undefined ? TEAM_RATINGS[homeTeam] : 6;
+    const awayRating = TEAM_RATINGS[awayTeam] !== undefined ? TEAM_RATINGS[awayTeam] : 6;
+    
+    const diff = homeRating - awayRating;
+    if (diff === 0) {
+      return { favored: 'NONE', value: 0 };
+    }
+    
+    const favored = diff > 0 ? 'HOME' : 'AWAY';
+    const absDiff = Math.abs(diff);
+    
+    let value = 0;
+    if (absDiff === 1 || absDiff === 2) {
+      value = 0.5;
+    } else if (absDiff === 3 || absDiff === 4) {
+      value = 1.0;
+    } else if (absDiff === 5 || absDiff === 6) {
+      value = 1.5;
+    } else if (absDiff >= 7) {
+      value = 2.0;
+    }
+    
+    return { favored, value };
+  }
+
+  // If passing a Match object
+  const m = matchOrHomeTeam;
+  if (m.handicapFavored && m.handicapFavored !== undefined) {
+    return {
+      favored: m.handicapFavored as 'HOME' | 'AWAY' | 'NONE',
+      value: m.handicapValue !== undefined ? m.handicapValue : 0
+    };
+  }
+
+  const h = m.homeTeam;
+  const a = m.awayTeam;
+  if (!h || !a || h === 'Chưa xác định' || a === 'Chưa xác định') {
+    return { favored: 'NONE', value: 0 };
+  }
+  const hRating = TEAM_RATINGS[h] !== undefined ? TEAM_RATINGS[h] : 6;
+  const aRating = TEAM_RATINGS[a] !== undefined ? TEAM_RATINGS[a] : 6;
+  
+  const diff = hRating - aRating;
+  if (diff === 0) {
+    return { favored: 'NONE', value: 0 };
+  }
+  
+  const favored = diff > 0 ? 'HOME' : 'AWAY';
+  const absDiff = Math.abs(diff);
+  
+  let value = 0;
+  if (absDiff === 1 || absDiff === 2) {
+    value = 0.5;
+  } else if (absDiff === 3 || absDiff === 4) {
+    value = 1.0;
+  } else if (absDiff === 5 || absDiff === 6) {
+    value = 1.5;
+  } else if (absDiff >= 7) {
+    value = 2.0;
+  }
+  
+  return { favored, value };
+}
+
+const toDatetimeLocal = (isoString: string): string => {
+  if (!isoString) return '';
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return '';
+    const tzOffset = date.getTimezoneOffset() * 60000; // offset in milliseconds
+    const localISOTime = new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+    return localISOTime;
+  } catch (e) {
+    return '';
+  }
+};
+
 interface AdminPanelProps {
   matches: Match[];
   currentTime: string;
@@ -41,6 +205,18 @@ export default function AdminPanel({
   const [bulkVisibilityAction, setBulkVisibilityAction] = useState<'SHOW' | 'HIDE' | null>(null);
   const [confirmRestoreFilename, setConfirmRestoreFilename] = useState<string | null>(null);
   const [confirmDeleteFilename, setConfirmDeleteFilename] = useState<string | null>(null);
+
+  // States for matchups and custom handicap config
+  const [editingMatchupId, setEditingMatchupId] = useState<string | null>(null);
+  const [matchupHomeTeamInput, setMatchupHomeTeamInput] = useState('');
+  const [matchupAwayTeamInput, setMatchupAwayTeamInput] = useState('');
+  const [matchupStageInput, setMatchupStageInput] = useState('');
+  const [matchupTimeInput, setMatchupTimeInput] = useState('');
+  const [matchupHandicapFavoredInput, setMatchupHandicapFavoredInput] = useState<'HOME' | 'AWAY' | 'NONE'>('NONE');
+  const [matchupHandicapValueInput, setMatchupHandicapValueInput] = useState<number>(0);
+  const [matchupPage, setMatchupPage] = useState(1);
+  const matchupPageSize = 8;
+  const [matchupSearchQuery, setMatchupSearchQuery] = useState('');
 
   // States for player reading
   const [playersList, setPlayersList] = useState<{ name: string; code: string; score: number; createdAt: string }[]>([]);
@@ -472,8 +648,6 @@ export default function AdminPanel({
           homeScore: homeScoreInput,
           awayScore: awayScoreInput,
           status: 'FINISHED',
-          homeTeam: homeTeamInput,
-          awayTeam: awayTeamInput,
           adminCode,
         }),
       });
@@ -484,6 +658,42 @@ export default function AdminPanel({
         onRefresh();
       } else {
         onNotify(data.error || 'Lỗi cập nhật tỉ số', 'error');
+      }
+    } catch (e) {
+      onNotify('Lỗi kết nối máy chủ', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Submit Matchup details (Knockout/Handicap settings)
+  const handleUpdateMatchupDetails = async (matchId: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/matches/update-details', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode || ''
+        },
+        body: JSON.stringify({
+          matchId,
+          homeTeam: matchupHomeTeamInput,
+          awayTeam: matchupAwayTeamInput,
+          stage: matchupStageInput,
+          matchTime: matchupTimeInput,
+          handicapFavored: matchupHandicapFavoredInput,
+          handicapValue: matchupHandicapValueInput,
+          adminCode,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify(`Cập nhật thông tin trận ${matchId} thành công!`, 'success');
+        setEditingMatchupId(null);
+        onRefresh();
+      } else {
+        onNotify(data.error || 'Lỗi cập nhật thông tin trận đấu', 'error');
       }
     } catch (e) {
       onNotify('Lỗi kết nối máy chủ', 'error');
@@ -582,6 +792,42 @@ export default function AdminPanel({
   useEffect(() => {
     setMatchPage(1);
   }, [searchQuery]);
+
+  const filteredMatchups = matches.filter((m) => {
+    if (!matchupSearchQuery) return true;
+    const query = matchupSearchQuery.toLowerCase();
+    return (
+      m.homeTeam.toLowerCase().includes(query) ||
+      m.awayTeam.toLowerCase().includes(query) ||
+      m.stage.toLowerCase().includes(query) ||
+      `trận ${m.id}`.includes(query) ||
+      m.id.toLowerCase().includes(query)
+    );
+  });
+
+  const sortedMatchups = [...filteredMatchups].sort((a, b) => {
+    const aFinished = a.status === 'FINISHED';
+    const bFinished = b.status === 'FINISHED';
+    if (aFinished !== bFinished) {
+      return aFinished ? 1 : -1;
+    }
+    return new Date(a.matchTime).getTime() - new Date(b.matchTime).getTime();
+  });
+
+  const totalMatchupCount = sortedMatchups.length;
+  const totalMatchupPages = Math.max(1, Math.ceil(totalMatchupCount / matchupPageSize));
+  const matchupStartIndex = (matchupPage - 1) * matchupPageSize;
+  const paginatedMatchups = sortedMatchups.slice(matchupStartIndex, matchupStartIndex + matchupPageSize);
+
+  useEffect(() => {
+    if (matchupPage > totalMatchupPages) {
+      setMatchupPage(totalMatchupPages);
+    }
+  }, [totalMatchupPages, matchupPage]);
+
+  useEffect(() => {
+    setMatchupPage(1);
+  }, [matchupSearchQuery]);
   
   const filteredHistory = historyList.filter(h => {
     const query = historySearch.toLowerCase().trim();
@@ -994,6 +1240,254 @@ export default function AdminPanel({
         )}
       </div>
 
+      {/* SECTION: MATCHUP & HANDICAP CONFIGURATION (VÒNG KNOCKOUT) */}
+      <div className="bg-slate-900 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-800/60">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-indigo-500/10 rounded-2xl text-indigo-400">
+              <Sliders className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-100 font-display">Cấu hình Cặp đấu & Kèo chấp (Knockout / Handicap)</h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">Cập nhật thủ công tên đội, vòng đấu, thời gian và tỷ lệ handicap cho các trận đấu</p>
+            </div>
+          </div>
+
+          {/* Matchup Table Search */}
+          <div className="relative w-full md:w-72">
+            <Search className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-550" />
+            <input
+              type="text"
+              placeholder="Tìm kiếm mã số, quốc gia, vòng đấu..."
+              value={matchupSearchQuery}
+              onChange={(e) => {
+                setMatchupSearchQuery(e.target.value);
+                setMatchupPage(1);
+              }}
+              className="w-full bg-slate-950 text-xs text-slate-200 pl-10 pr-4 py-2.5 border border-slate-800 rounded-xl focus:outline-none focus:border-indigo-500 transition font-medium"
+            />
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-350 leading-relaxed">
+          Sử dụng bảng này để thiết lập thủ công các cặp đấu ở các vòng loại trực tiếp (Vòng 32 đội, Vòng 16, Tứ kết, Bán kết, Chung kết) khi có kết quả chính thức hoặc thay đổi tỷ lệ kèo chấp (handicap) theo mong muốn độc lập từ Ban Tổ Chức.
+        </p>
+
+        {/* Matchup Table */}
+        <div className="overflow-x-auto max-h-[460px] border border-slate-850 rounded-2xl bg-slate-950 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+          <table className="w-full text-left text-xs border-collapse relative">
+            <thead className="bg-slate-900/90 text-slate-400 uppercase text-[9.5px] font-bold tracking-widest sticky top-0 border-b border-slate-850 z-10 backdrop-blur-md">
+              <tr>
+                <th className="py-3.5 px-4">Mã số</th>
+                <th className="py-3.5 px-4">Vòng đấu</th>
+                <th className="py-3.5 px-4">Cặp đấu (Trực tiếp)</th>
+                <th className="py-3.5 px-4">Thời gian</th>
+                <th className="py-3.5 px-4">Kèo chấp BTC</th>
+                <th className="py-3.5 px-4 text-right pr-4">Hành động</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-850/60 text-slate-300">
+              {filteredMatchups.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-500 font-bold uppercase tracking-widest">
+                    Chưa tìm thấy cặp trận đấu nào khớp bộ lọc tìm kiếm.
+                  </td>
+                </tr>
+              ) : (
+                paginatedMatchups.map((m) => {
+                  const isBeingEdited = editingMatchupId === m.id;
+                  const currentHandicap = getMatchHandicap(m);
+
+                  return (
+                    <tr key={m.id} className="hover:bg-slate-900/40 transition duration-150">
+                      {/* ID */}
+                      <td className="py-4 px-4 font-mono font-black text-slate-400">Trận {m.id}</td>
+
+                      {/* Stage */}
+                      <td className="py-4 px-4">
+                        {isBeingEdited ? (
+                          <input
+                            type="text"
+                            value={matchupStageInput}
+                            onChange={(e) => setMatchupStageInput(e.target.value)}
+                            className="bg-slate-900 border border-slate-750 text-slate-100 rounded px-2 py-1 text-xs w-28 font-semibold focus:outline-none focus:border-indigo-500"
+                          />
+                        ) : (
+                          <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-850 text-[11px] font-bold whitespace-nowrap text-indigo-400">
+                            {m.stage}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Teams */}
+                      <td className="py-4 px-4">
+                        {isBeingEdited ? (
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="text"
+                              value={matchupHomeTeamInput}
+                              onChange={(e) => setMatchupHomeTeamInput(e.target.value)}
+                              placeholder="Đội nhà"
+                              className="bg-slate-900 border border-slate-750 text-slate-100 rounded px-2 py-1 text-xs w-28 font-bold text-center focus:outline-none focus:border-indigo-500"
+                            />
+                            <span className="text-slate-500 text-[10px]">vs</span>
+                            <input
+                              type="text"
+                              value={matchupAwayTeamInput}
+                              onChange={(e) => setMatchupAwayTeamInput(e.target.value)}
+                              placeholder="Đội khách"
+                              className="bg-slate-900 border border-slate-750 text-slate-100 rounded px-2 py-1 text-xs w-28 font-bold text-center focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-2 font-bold text-slate-200">
+                            <span>{m.homeTeam}</span>
+                            <span className="text-[10px] text-slate-550 lowercase font-medium">vs</span>
+                            <span>{m.awayTeam}</span>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Match Time */}
+                      <td className="py-4 px-4">
+                        {isBeingEdited ? (
+                          <input
+                            type="datetime-local"
+                            value={toDatetimeLocal(matchupTimeInput)}
+                            onChange={(e) => {
+                              const localVal = e.target.value;
+                              if (localVal) {
+                                try {
+                                  const isoVal = new Date(localVal).toISOString();
+                                  setMatchupTimeInput(isoVal);
+                                } catch (err) {
+                                  setMatchupTimeInput(localVal);
+                                }
+                              } else {
+                                setMatchupTimeInput('');
+                              }
+                            }}
+                            className="bg-slate-900 border border-slate-750 text-slate-200 rounded px-2 py-1 text-xs w-44 font-mono focus:outline-none focus:border-indigo-500"
+                          />
+                        ) : (
+                          <span className="text-xs text-slate-400 font-mono">
+                            {new Date(m.matchTime).toLocaleString('vi-VN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Handicap settings */}
+                      <td className="py-4 px-4">
+                        {isBeingEdited ? (
+                          <div className="flex items-center space-x-2">
+                            <select
+                              value={matchupHandicapFavoredInput}
+                              onChange={(e) => setMatchupHandicapFavoredInput(e.target.value as any)}
+                              className="bg-slate-900 border border-slate-750 text-slate-200 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-indigo-500"
+                            >
+                              <option value="NONE">Đồng banh (0)</option>
+                              <option value="HOME">Đội nhà chấp</option>
+                              <option value="AWAY">Đội khách chấp</option>
+                            </select>
+                            {matchupHandicapFavoredInput !== 'NONE' && (
+                              <select
+                                value={matchupHandicapValueInput}
+                                onChange={(e) => setMatchupHandicapValueInput(parseFloat(e.target.value))}
+                                className="bg-slate-900 border border-slate-750 text-slate-200 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-indigo-500 font-mono"
+                              >
+                                <option value={0.5}>0.5</option>
+                                <option value={1.0}>1.0</option>
+                                <option value={1.5}>1.5</option>
+                                <option value={2.0}>2.0</option>
+                                <option value={2.5}>2.5</option>
+                                <option value={3.0}>3.0</option>
+                              </select>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col text-[11px]">
+                            {m.handicapFavored && m.handicapFavored !== 'NONE' ? (
+                              <span className="text-amber-400 font-bold">
+                                🌟 {m.handicapFavored === 'HOME' ? m.homeTeam : m.awayTeam} chấp {m.handicapValue} (Kèo tay)
+                              </span>
+                            ) : (
+                              <span className="text-slate-450">
+                                ⚙️ Tự động: {currentHandicap.favored === 'NONE' ? 'Đồng banh (0)' : `${currentHandicap.favored === 'HOME' ? m.homeTeam : m.awayTeam} chấp ${currentHandicap.value}`}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-4 px-4 text-right pr-4">
+                        {isBeingEdited ? (
+                          <div className="flex justify-end space-x-2">
+                            <button
+                              onClick={() => handleUpdateMatchupDetails(m.id)}
+                              disabled={isLoading}
+                              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1 rounded text-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                            >
+                              Lưu
+                            </button>
+                            <button
+                              onClick={() => setEditingMatchupId(null)}
+                              className="bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold px-3 py-1 rounded text-xs transition cursor-pointer"
+                            >
+                              Hủy
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setEditingMatchupId(m.id);
+                              setMatchupHomeTeamInput(m.homeTeam);
+                              setMatchupAwayTeamInput(m.awayTeam);
+                              setMatchupStageInput(m.stage);
+                              setMatchupTimeInput(m.matchTime);
+                              setMatchupHandicapFavoredInput(m.handicapFavored || 'NONE');
+                              setMatchupHandicapValueInput(m.handicapValue || 0.5);
+                            }}
+                            className="bg-indigo-900/30 hover:bg-indigo-900/50 text-indigo-400 border border-indigo-500/10 hover:border-indigo-500/30 font-bold px-3 py-1 rounded text-xs transition cursor-pointer active:scale-95 whitespace-nowrap"
+                          >
+                            ✏️ Cấu hình cặp đấu
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Matchup Pagination */}
+        {totalMatchupPages > 1 && (
+          <div className="flex items-center justify-between pt-2 border-t border-slate-850/40">
+            <span className="text-[11px] text-slate-400 font-medium">
+              Hiển thị trang <strong>{matchupPage}</strong> / {totalMatchupPages} ({filteredMatchups.length} trận đấu)
+            </span>
+            <div className="flex space-x-1">
+              <button
+                disabled={matchupPage === 1}
+                onClick={() => setMatchupPage(p => Math.max(1, p - 1))}
+                className="bg-slate-950 hover:bg-slate-900 disabled:opacity-40 text-slate-300 font-bold px-3 py-1.5 rounded-xl border border-slate-800 text-[11px] transition cursor-pointer"
+              >
+                Trước
+              </button>
+              <button
+                disabled={matchupPage === totalMatchupPages}
+                onClick={() => setMatchupPage(p => Math.min(totalMatchupPages, p + 1))}
+                className="bg-slate-950 hover:bg-slate-900 disabled:opacity-40 text-slate-300 font-bold px-3 py-1.5 rounded-xl border border-slate-800 text-[11px] transition cursor-pointer"
+              >
+                Sau
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Match Scores Input Section (Bento Rounded 3xl) */}
       <div className="bg-slate-900 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4">
         
@@ -1148,36 +1642,14 @@ export default function AdminPanel({
                       
                       {/* Versus info */}
                       <td className="py-4 px-4 text-center">
-                        {isBeingUpdated ? (
-                          <div className="flex flex-col space-y-1.5 items-center justify-center max-w-[160px] mx-auto">
-                            <input
-                              type="text"
-                              value={homeTeamInput}
-                              onChange={(e) => setHomeTeamInput(e.target.value)}
-                              className="w-full bg-slate-905 text-center text-[11px] font-bold border border-slate-700 rounded-lg py-1 px-1.5 text-slate-100 focus:outline-none focus:border-emerald-500"
-                              placeholder="Đội nhà"
-                            />
-                            <span className="text-[10px] text-slate-550 lowercase font-medium">vs</span>
-                            <input
-                              type="text"
-                              value={awayTeamInput}
-                              onChange={(e) => setAwayTeamInput(e.target.value)}
-                              className="w-full bg-slate-905 text-center text-[11px] font-bold border border-slate-700 rounded-lg py-1 px-1.5 text-slate-100 focus:outline-none focus:border-emerald-500"
-                              placeholder="Đội khách"
-                            />
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex items-center justify-center space-x-2 font-bold text-slate-200">
-                              <span>{m.homeTeam}</span>
-                              <span className="text-[10px] text-slate-550 lowercase font-medium">vs</span>
-                              <span>{m.awayTeam}</span>
-                            </div>
-                            <div className="text-[9.5px] text-slate-500 font-mono mt-0.5">
-                              {new Date(m.matchTime).toLocaleString('vi-VN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                            </div>
-                          </>
-                        )}
+                        <div className="flex items-center justify-center space-x-2 font-bold text-slate-200">
+                          <span>{m.homeTeam}</span>
+                          <span className="text-[10px] text-slate-550 lowercase font-medium">vs</span>
+                          <span>{m.awayTeam}</span>
+                        </div>
+                        <div className="text-[9.5px] text-slate-500 font-mono mt-0.5">
+                          {new Date(m.matchTime).toLocaleString('vi-VN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </div>
                       </td>
                       
                       {/* Score dials */}

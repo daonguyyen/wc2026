@@ -178,8 +178,55 @@ const TEAM_RATINGS: Record<string, number> = {
   "Panama": 4
 };
 
-function getMatchHandicap(homeTeam: string, awayTeam: string): { favored: 'HOME' | 'AWAY' | 'NONE'; value: number } {
-  if (homeTeam === 'Chưa xác định' || awayTeam === 'Chưa xác định') {
+function getMatchHandicap(matchOrHomeTeam: any, awayTeamStr?: string): { favored: 'HOME' | 'AWAY' | 'NONE'; value: number } {
+  if (!matchOrHomeTeam) {
+    return { favored: 'NONE', value: 0 };
+  }
+
+  // If passing string arguments
+  if (typeof matchOrHomeTeam === 'string') {
+    const homeTeam = matchOrHomeTeam;
+    const awayTeam = awayTeamStr || '';
+    if (homeTeam === 'Chưa xác định' || awayTeam === 'Chưa xác định' || !homeTeam || !awayTeam) {
+      return { favored: 'NONE', value: 0 };
+    }
+    const homeRating = TEAM_RATINGS[homeTeam] !== undefined ? TEAM_RATINGS[homeTeam] : 6;
+    const awayRating = TEAM_RATINGS[awayTeam] !== undefined ? TEAM_RATINGS[awayTeam] : 6;
+    
+    const diff = homeRating - awayRating;
+    if (diff === 0) {
+      return { favored: 'NONE', value: 0 };
+    }
+    
+    const favored = diff > 0 ? 'HOME' : 'AWAY';
+    const absDiff = Math.abs(diff);
+    
+    let value = 0;
+    if (absDiff === 1 || absDiff === 2) {
+      value = 0.5;
+    } else if (absDiff === 3 || absDiff === 4) {
+      value = 1.0;
+    } else if (absDiff === 5 || absDiff === 6) {
+      value = 1.5;
+    } else if (absDiff >= 7) {
+      value = 2.0;
+    }
+    
+    return { favored, value };
+  }
+
+  // If passing a Match object
+  const m = matchOrHomeTeam;
+  if (m.handicapFavored && m.handicapFavored !== undefined) {
+    return {
+      favored: m.handicapFavored as 'HOME' | 'AWAY' | 'NONE',
+      value: m.handicapValue !== undefined ? m.handicapValue : 0
+    };
+  }
+
+  const homeTeam = m.homeTeam || '';
+  const awayTeam = m.awayTeam || '';
+  if (homeTeam === 'Chưa xác định' || awayTeam === 'Chưa xác định' || !homeTeam || !awayTeam) {
     return { favored: 'NONE', value: 0 };
   }
   const homeRating = TEAM_RATINGS[homeTeam] !== undefined ? TEAM_RATINGS[homeTeam] : 6;
@@ -207,8 +254,8 @@ function getMatchHandicap(homeTeam: string, awayTeam: string): { favored: 'HOME'
   return { favored, value };
 }
 
-function getHandicapWinner(homeScore: number, awayScore: number, homeTeam: string, awayTeam: string): 'HOME' | 'DRAW' | 'AWAY' {
-  const { favored, value } = getMatchHandicap(homeTeam, awayTeam);
+function getHandicapWinner(matchOrHomeTeam: any, homeScore: number, awayScore: number, homeTeamStr?: string, awayTeamStr?: string): 'HOME' | 'DRAW' | 'AWAY' {
+  const { favored, value } = getMatchHandicap(matchOrHomeTeam, typeof matchOrHomeTeam === 'string' ? homeTeamStr : undefined);
   if (favored === 'NONE' || value === 0) {
     if (homeScore > awayScore) return 'HOME';
     if (homeScore < awayScore) return 'AWAY';
@@ -458,7 +505,8 @@ function recalculateAllScores() {
 
     for (const match of db.matches) {
       const matchTime = new Date(match.matchTime);
-      const lockTime = new Date(matchTime.getTime() + 15 * 60 * 1000);
+      const limitMinutes = match.stage.startsWith('Vòng bảng') ? 15 : 7;
+      const lockTime = new Date(matchTime.getTime() + limitMinutes * 60 * 1000);
       const isLocked = now > lockTime || match.status === 'FINISHED';
 
       if (isLocked) {
@@ -592,19 +640,11 @@ app.post('/api/matches/update-score', (req, res) => {
   if (!isAdmin(req)) {
     return res.status(403).json({ error: 'Quyền admin bị từ chối! Hoạt động ghi điểm chỉ dành cho tài khoản Admin.' });
   }
-  const { matchId, homeScore, awayScore, status, homeTeam, awayTeam } = req.body;
+  const { matchId, homeScore, awayScore, status } = req.body;
   
   const match = db.matches.find((m) => m.id === String(matchId));
   if (!match) {
     return res.status(404).json({ error: 'Không tìm thấy trận đấu' });
-  }
-
-  // Allow updating team names manually
-  if (homeTeam && typeof homeTeam === 'string') {
-    match.homeTeam = homeTeam.trim();
-  }
-  if (awayTeam && typeof awayTeam === 'string') {
-    match.awayTeam = awayTeam.trim();
   }
 
   const hScore = Number(homeScore);
@@ -624,12 +664,82 @@ app.post('/api/matches/update-score', (req, res) => {
   db.adminCustomizedVisibility[match.id] = true;
 
   // Calculate winner based on handicap rules
-  const handicapWinner = getHandicapWinner(hScore, aScore, match.homeTeam, match.awayTeam);
+  const handicapWinner = getHandicapWinner(match, hScore, aScore);
   match.winner = handicapWinner;
 
   recalculateAllScores();
   res.json({ message: 'Cập nhật tỉ số và tính điểm người chơi thành công!', match });
 });
+
+const ENGLISH_TO_VIETNAMESE_TEAMS: Record<string, string> = {
+  "Mexico": "Mexico",
+  "South Africa": "Nam Phi",
+  "South Korea": "Hàn Quốc",
+  "Czech Republic": "CH Séc",
+  "Canada": "Canada",
+  "Bosnia and Herzegovina": "Bosnia & Herzegovina",
+  "Bosnia": "Bosnia & Herzegovina",
+  "USA": "Mỹ",
+  "United States": "Mỹ",
+  "Paraguay": "Paraguay",
+  "Haiti": "Haiti",
+  "Scotland": "Scotland",
+  "France": "Pháp",
+  "Germany": "Đức",
+  "Spain": "Tây Ban Nha",
+  "England": "Anh",
+  "Italy": "Ý",
+  "Portugal": "Bồ Đào Nha",
+  "Argentina": "Argentina",
+  "Brazil": "Brazil",
+  "Uruguay": "Uruguay",
+  "Colombia": "Colombia",
+  "Netherlands": "Hà Lan",
+  "Belgium": "Bỉ",
+  "Croatia": "Croatia",
+  "Switzerland": "Thụy Sĩ",
+  "Morocco": "Ma-rốc",
+  "Japan": "Nhật Bản",
+  "Norway": "Na Uy",
+  "Ecuador": "Ecuador",
+  "Turkey": "Thổ Nhĩ Kỳ",
+  "Czechia": "CH Séc",
+  "Austria": "Áo",
+  "Ghana": "Ghana",
+  "Senegal": "Senegal",
+  "Sweden": "Thụy Điển",
+  "Ivory Coast": "Bờ Biển Ngà",
+  "Tunisia": "Tunisia",
+  "Iran": "Iran",
+  "Algeria": "Algeria",
+  "Uzbekistan": "Uzbekistan",
+  "Qatar": "Qatar",
+  "Honduras": "Honduras",
+  "Panama": "Panama",
+  "Australia": "Úc",
+  "Saudi Arabia": "Ả Rập Xê-út",
+  "Iraq": "Iraq",
+  "Jordan": "Jordan",
+  "New Zealand": "New Zealand",
+  "Cape Verde": "Cape Verde",
+  "Curaçao": "Curaçao",
+  "DR Congo": "CHDC Congo"
+};
+
+function translateTeamName(name: string): string {
+  if (!name) return 'Chưa xác định';
+  const cleanName = name.trim();
+  if (ENGLISH_TO_VIETNAMESE_TEAMS[cleanName]) {
+    return ENGLISH_TO_VIETNAMESE_TEAMS[cleanName];
+  }
+  // Try case-insensitive lookup
+  for (const [en, vi] of Object.entries(ENGLISH_TO_VIETNAMESE_TEAMS)) {
+    if (en.toLowerCase() === cleanName.toLowerCase()) {
+      return vi;
+    }
+  }
+  return cleanName;
+}
 
 // Endpoint to synchronize match results from worldcup26.ir API (can be automated or manually triggered)
 app.post('/api/matches/sync', async (req, res) => {
@@ -655,6 +765,25 @@ app.post('/api/matches/sync', async (req, res) => {
       if (match) {
         let changed = false;
 
+        // Sync teams first (especially useful for knockout matchups as they are decided)
+        const apiHome = g.home_team || g.homeTeam || g.home_team_name;
+        const apiAway = g.away_team || g.awayTeam || g.away_team_name;
+        
+        if (apiHome && typeof apiHome === 'string') {
+          const homeClean = translateTeamName(apiHome);
+          if (homeClean && homeClean !== 'Chưa xác định' && match.homeTeam !== homeClean) {
+            match.homeTeam = homeClean;
+            changed = true;
+          }
+        }
+        if (apiAway && typeof apiAway === 'string') {
+          const awayClean = translateTeamName(apiAway);
+          if (awayClean && awayClean !== 'Chưa xác định' && match.awayTeam !== awayClean) {
+            match.awayTeam = awayClean;
+            changed = true;
+          }
+        }
+
         // Check scores
         const homeScore = g.home_score !== "null" && g.home_score !== null ? parseInt(g.home_score, 10) : undefined;
         const awayScore = g.away_score !== "null" && g.away_score !== null ? parseInt(g.away_score, 10) : undefined;
@@ -673,7 +802,7 @@ app.post('/api/matches/sync', async (req, res) => {
           match.awayScore = awayScore;
           
           if (status === 'FINISHED' && homeScore !== undefined && awayScore !== undefined) {
-            const handicapWinner = getHandicapWinner(homeScore, awayScore, match.homeTeam, match.awayTeam);
+            const handicapWinner = getHandicapWinner(match, homeScore, awayScore);
             match.winner = handicapWinner;
             match.visible = true; // Auto-set visible for synchronized finished matches!
             if (!db.adminCustomizedVisibility) {
@@ -697,7 +826,7 @@ app.post('/api/matches/sync', async (req, res) => {
     }
 
     res.json({
-      message: `Đồng bộ hoàn tất! Cập nhật ${updatedCount} trận đấu mới, trong đó có ${finishedNewCount} trận vừa hoàn thành.`,
+      message: `Đồng bộ hoàn tất! Cập nhật/Đồng bộ ${updatedCount} trận đấu mới, trong đó có ${finishedNewCount} trận vừa hoàn thành.`,
       updatedCount,
       finishedNewCount
     });
@@ -794,15 +923,15 @@ app.post('/api/predictions', (req, res) => {
   }
 
   // CRITICAL CONSTRAINT:
-  // Khung thời gian dự đoán là 15 phút đầu, sau 15 phút nếu không bình chọn thì sẽ bị khoá.
-  // Lock time = Match Time + 15 minutes
+  // Khung thời gian dự đoán là 15 phút đầu (Vòng bảng) hoặc 7 phút (Vòng 32 trở đi), sau đó sẽ bị khoá.
   const matchTime = new Date(match.matchTime);
   const now = getCurrentTime();
-  const lockTime = new Date(matchTime.getTime() + 15 * 60 * 1000);
+  const limitMinutes = match.stage.startsWith('Vòng bảng') ? 15 : 7;
+  const lockTime = new Date(matchTime.getTime() + limitMinutes * 60 * 1000);
 
   if (now > lockTime) {
     return res.status(400).json({
-      error: 'Bình chọn đã khoá! Đã quá 15 phút đầu kể từ khi trận đấu bắt đầu. Bạn không thể bình chọn hay thay đổi.',
+      error: `Bình chọn đã khoá! Đã quá ${limitMinutes} phút đầu kể từ khi trận đấu bắt đầu. Bạn không thể bình chọn hay thay đổi.`,
     });
   }
 
@@ -1089,7 +1218,7 @@ app.post('/api/admin/generate-demo', (req, res) => {
     m.status = 'FINISHED';
     m.homeScore = matchResults[i].home;
     m.awayScore = matchResults[i].away;
-    m.winner = getHandicapWinner(m.homeScore, m.awayScore, m.homeTeam, m.awayTeam);
+    m.winner = getHandicapWinner(m, m.homeScore, m.awayScore);
     m.visible = true; // Make active matches visible
   }
 
@@ -1193,6 +1322,54 @@ app.get('/api/admin/players', (req, res) => {
   res.json({ players });
 });
 
+// 12.5. Update match details (Admin only, separate from scoring)
+app.post('/api/admin/matches/update-details', (req, res) => {
+  if (!isAdmin(req)) {
+    return res.status(403).json({ error: 'Quyền admin bị từ chối! Chức năng này chỉ dành cho tài khoản Admin.' });
+  }
+  const { matchId, homeTeam, awayTeam, stage, matchTime, handicapFavored, handicapValue } = req.body;
+  const match = db.matches.find(m => m.id === String(matchId));
+  if (!match) {
+    return res.status(404).json({ error: 'Không tìm thấy trận đấu' });
+  }
+
+  if (homeTeam && typeof homeTeam === 'string') {
+    match.homeTeam = homeTeam.trim();
+  }
+  if (awayTeam && typeof awayTeam === 'string') {
+    match.awayTeam = awayTeam.trim();
+  }
+  if (stage && typeof stage === 'string') {
+    match.stage = stage.trim();
+  }
+  if (matchTime && typeof matchTime === 'string') {
+    match.matchTime = matchTime.trim();
+  }
+
+  // Handle custom handicap
+  if (handicapFavored && ['HOME', 'AWAY', 'NONE'].includes(handicapFavored)) {
+    match.handicapFavored = handicapFavored;
+  } else if (handicapFavored === 'NONE' || handicapFavored === null) {
+    match.handicapFavored = 'NONE';
+  }
+
+  if (handicapValue !== undefined) {
+    const val = Number(handicapValue);
+    if (!isNaN(val)) {
+      match.handicapValue = val;
+    }
+  }
+
+  // Recalculate winner if match is finished
+  if (match.status === 'FINISHED' && match.homeScore !== undefined && match.awayScore !== undefined) {
+    match.winner = getHandicapWinner(match, match.homeScore, match.awayScore);
+  }
+
+  recalculateAllScores();
+  saveDB();
+  res.json({ message: 'Cập nhật thông tin trận đấu thành công!', match });
+});
+
 // 13. Toggle match visibility dynamically (Admin only)
 app.post('/api/admin/matches/toggle-visibility', (req, res) => {
   if (!isAdmin(req)) {
@@ -1221,12 +1398,32 @@ app.post('/api/admin/matches/bulk-visibility', (req, res) => {
   if (!db.adminCustomizedVisibility) {
     db.adminCustomizedVisibility = {};
   }
+  
+  let affectedCount = 0;
   for (const m of db.matches) {
-    m.visible = !!visible;
-    db.adminCustomizedVisibility[m.id] = !!visible;
+    if (!visible) {
+      // If we are hiding all, protect FINISHED and LIVE matches
+      if (m.status === 'FINISHED' || m.status === 'LIVE' || (m.homeScore !== undefined && m.awayScore !== undefined)) {
+        m.visible = true;
+        db.adminCustomizedVisibility[m.id] = true;
+      } else {
+        m.visible = false;
+        db.adminCustomizedVisibility[m.id] = false;
+        affectedCount++;
+      }
+    } else {
+      m.visible = true;
+      db.adminCustomizedVisibility[m.id] = true;
+      affectedCount++;
+    }
   }
   saveDB();
-  res.json({ message: `Đã cập nhật hiển thị (${visible ? 'HIỆN' : 'ẨN'}) toàn bộ 104 trận đấu thành công!` });
+  
+  const msg = visible 
+    ? `Đã hiển thị toàn bộ 104 trận đấu thành công!` 
+    : `Đã cắt ẩn ${affectedCount} trận đấu chưa bắt đầu (SCHEDULED) thành công! Các trận đấu đang trực tiếp (LIVE) hoặc đã kết thúc (FINISHED) được tự động giữ hiển thị để bảo toàn dữ liệu bảng điểm.`;
+    
+  res.json({ message: msg });
 });
 
 // 14.5 Public/Unified user voting/prediction histories (Masked phone for regular users)
@@ -1248,6 +1445,7 @@ app.get('/api/predictions-history', (req, res) => {
       evaluated: p.evaluated,
       matchStatus: match ? match.status : 'Không rõ',
       matchTime: match ? match.matchTime : null,
+      matchStage: match ? match.stage : null,
     };
   });
 
@@ -1278,6 +1476,7 @@ app.get('/api/admin/predictions-history', (req, res) => {
       evaluated: p.evaluated,
       matchStatus: match ? match.status : 'Không rõ',
       matchTime: match ? match.matchTime : null,
+      matchStage: match ? match.stage : null,
     };
   });
 
@@ -1293,6 +1492,7 @@ app.get('/api/admin/export-all', (req, res) => {
     return res.status(403).json({ error: 'Quyền admin bị từ chối! Chức năng này chỉ dành cho tài khoản Admin.' });
   }
   res.json({
+    matches: db.matches,
     players: db.players,
     predictions: db.predictions,
     outrightPredictions: db.outrightPredictions || {},
@@ -1315,6 +1515,7 @@ app.post('/api/admin/backups/create', (req, res) => {
     const backupFilePath = path.join(BACKUPS_DIR, filename);
     
     const backupData = {
+      matches: db.matches,
       players: db.players,
       predictions: db.predictions,
       outrightPredictions: db.outrightPredictions || {},
@@ -1388,6 +1589,9 @@ app.post('/api/admin/backups/restore', (req, res) => {
     // Auto-create snapshot and replace
     createAutomaticBackup('pre_restore_undo');
     
+    if (data.matches && Array.isArray(data.matches)) {
+      db.matches = data.matches;
+    }
     db.players = data.players;
     db.predictions = data.predictions;
     db.outrightPredictions = data.outrightPredictions || {};
@@ -1446,6 +1650,9 @@ app.post('/api/admin/backups/import-direct', (req, res) => {
     
     createAutomaticBackup('pre_import_undo');
     
+    if (backupData.matches && Array.isArray(backupData.matches)) {
+      db.matches = backupData.matches;
+    }
     db.players = backupData.players;
     db.predictions = backupData.predictions;
     db.outrightPredictions = backupData.outrightPredictions || {};

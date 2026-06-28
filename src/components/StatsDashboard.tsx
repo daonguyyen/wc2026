@@ -87,6 +87,7 @@ export default function StatsDashboard({
     evaluated: boolean;
     matchStatus: string;
     matchTime?: string | null;
+    matchStage?: string | null;
   }[]>([]);
   const [loadingHistory, setLoadingHistory] = React.useState(false);
   const [historySearch, setHistorySearch] = React.useState('');
@@ -119,9 +120,6 @@ export default function StatsDashboard({
   }, [isAdmin, adminCode]);
 
   const filteredHistory = historyList.filter(h => {
-    // Only search/filter if user is admin
-    if (!isAdmin) return true;
-    
     const query = historySearch.toLowerCase().trim();
     if (!query) return true;
     return (
@@ -146,13 +144,14 @@ export default function StatsDashboard({
       if (!h.votedAt || !h.matchTime) return;
       const voteTime = new Date(h.votedAt).getTime();
       const matchStart = new Date(h.matchTime).getTime();
-      const cutoff = matchStart + 15 * 60 * 1000; // 15 mins lock limit
+      const limitMinutes = (h.matchStage && !h.matchStage.startsWith('Vòng bảng')) ? 7 : 15;
+      const cutoff = matchStart + limitMinutes * 60 * 1000; // lock limit
       
       const gap = cutoff - voteTime; // in ms
       
-      // If valid prediction (before/at cutoff) and within 25 minutes of lock time
-      // (This covers 10 minutes before kickoff to 15 minutes after kickoff)
-      if (gap >= 0 && gap <= 25 * 60 * 1000) {
+      // If valid prediction (before/at cutoff) and within (limitMinutes + 10) minutes of lock time
+      // (This covers 10 minutes before kickoff to limitMinutes after kickoff)
+      if (gap >= 0 && gap <= (limitMinutes + 10) * 60 * 1000) {
         const key = h.playerName + h.playerPhone;
         if (!playersMap[key]) {
           playersMap[key] = {
@@ -449,15 +448,13 @@ export default function StatsDashboard({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <input 
-                type="text"
-                placeholder="Tìm theo tên hoặc mã..."
-                value={historySearch}
-                onChange={e => setHistorySearch(e.target.value)}
-                className="bg-slate-950 border border-slate-850 text-xs font-semibold text-slate-100 rounded-xl py-2 px-3 focus:outline-none w-48"
-              />
-            )}
+            <input 
+              type="text"
+              placeholder="Tìm theo tên hoặc mã..."
+              value={historySearch}
+              onChange={e => setHistorySearch(e.target.value)}
+              className="bg-slate-950 border border-slate-850 text-xs font-semibold text-slate-100 rounded-xl py-2 px-3 focus:outline-none w-48"
+            />
             <button 
               type="button"
               onClick={fetchPredictionsHistory} 
