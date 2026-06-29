@@ -414,6 +414,8 @@ async function loadDB() {
       } else {
         // Reconcile/align database match times, team names & stages with generate104Matches() to apply accurate translations and scheduling
         const sourceMatches = generate104Matches();
+        db.matches = (db.matches || []).filter((m) => m && typeof m === "object" && m.id);
+
         db.matches = db.matches.map((m) => {
           const src = sourceMatches.find((s) => s.id === m.id);
           if (!src) return m;
@@ -421,18 +423,30 @@ async function loadDB() {
           const customized = adminCustoms[m.id];
 
           // Check if match is customized or if it's a playoff match that has been edited (not equal to TBD)
-          const isPlayoff = m.stage && !m.stage.startsWith("Vòng bảng");
+          // Compare with src to see if admin has edited homeTeam, awayTeam, stage, matchTime, or handicaps
+          const hasDifferentHomeTeam = m.homeTeam !== undefined && m.homeTeam !== src.homeTeam;
+          const hasDifferentAwayTeam = m.awayTeam !== undefined && m.awayTeam !== src.awayTeam;
+          const hasDifferentTime = m.matchTime !== undefined && m.matchTime !== src.matchTime;
+          const hasDifferentStage = m.stage !== undefined && m.stage !== src.stage;
+          const hasDifferentHandicapVal = m.handicapValue !== undefined && m.handicapValue !== src.handicapValue;
+          const hasDifferentHandicapFav = m.handicapFavored !== undefined && m.handicapFavored !== src.handicapFavored;
+
+          const isPlayoff = m.stage && typeof m.stage === "string" && !m.stage.startsWith("Vòng bảng");
           const isEditedPlayoff = isPlayoff && (m.homeTeam !== "Chưa xác định" || m.awayTeam !== "Chưa xác định");
-          const shouldPreserve = m.isCustomized || isEditedPlayoff;
+          const shouldPreserve =
+            m.isCustomized || hasDifferentHomeTeam || hasDifferentAwayTeam || hasDifferentTime || hasDifferentStage || hasDifferentHandicapVal || hasDifferentHandicapFav || isEditedPlayoff;
 
           if (shouldPreserve) {
             return {
+              ...src,
               ...m,
-              visible: customized !== undefined ? customized : isFinished,
+              isCustomized: true,
+              visible: customized !== undefined ? customized : m.visible !== undefined ? m.visible : isFinished,
             };
           }
 
           return {
+            ...src,
             ...m,
             homeTeam: src.homeTeam,
             awayTeam: src.awayTeam,
@@ -468,7 +482,7 @@ async function loadDB() {
     };
     seedDefaultPlayers();
     recalculateAllScores();
-    await saveDB();
+    // CRITICAL: DO NOT call saveDB() here, to prevent overwriting/erasing the existing Firestore data on load error!
   }
 }
 
@@ -530,7 +544,7 @@ function recalculateAllScores() {
 
     for (const match of db.matches) {
       const matchTime = new Date(match.matchTime);
-      const limitMinutes = match.stage.startsWith("Vòng bảng") ? 15 : 7;
+      const limitMinutes = match.stage && typeof match.stage === "string" && match.stage.startsWith("Vòng bảng") ? 15 : 7;
       const lockTime = new Date(matchTime.getTime() + limitMinutes * 60 * 1000);
       const isLocked = now > lockTime || match.status === "FINISHED";
 
@@ -585,7 +599,8 @@ function recalculateAllScores() {
 }
 
 // Middlewares
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Helper: Get Current Time (supporting simulation)
 function getCurrentTime(): Date {
@@ -942,7 +957,7 @@ app.post("/api/predictions", (req, res) => {
   // Khung thời gian dự đoán là 15 phút đầu (Vòng bảng) hoặc 7 phút (Vòng 32 trở đi), sau đó sẽ bị khoá.
   const matchTime = new Date(match.matchTime);
   const now = getCurrentTime();
-  const limitMinutes = match.stage.startsWith("Vòng bảng") ? 15 : 7;
+  const limitMinutes = match.stage && typeof match.stage === "string" && match.stage.startsWith("Vòng bảng") ? 15 : 7;
   const lockTime = new Date(matchTime.getTime() + limitMinutes * 60 * 1000);
 
   if (now > lockTime) {
