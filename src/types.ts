@@ -32,6 +32,7 @@ export interface Match {
   visible?: boolean;
   handicapFavored?: "HOME" | "AWAY" | "NONE";
   handicapValue?: number;
+  isCustomized?: boolean;
 }
 
 export interface MatchOdds {
