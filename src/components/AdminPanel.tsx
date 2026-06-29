@@ -450,19 +450,30 @@ export default function AdminPanel({
           },
           body: JSON.stringify({ adminCode, backupData: backupDataObj })
         });
-        const data = await res.json();
-        if (res.ok) {
-          onNotify(data.message || 'Import dữ liệu thành công!', 'success');
-          onRefresh();
-          fetchPlayersList();
-          fetchPredictionsHistory();
-          fetchOutrightConfig();
-          fetchBackupsList();
+        
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (res.ok) {
+            onNotify(data.message || 'Import dữ liệu thành công!', 'success');
+            onRefresh();
+            fetchPlayersList();
+            fetchPredictionsHistory();
+            fetchOutrightConfig();
+            fetchBackupsList();
+          } else {
+            onNotify(data.error || 'Lỗi khi import', 'error');
+          }
         } else {
-          onNotify(data.error || 'Lỗi khi import', 'error');
+          const text = await res.text();
+          if (res.status === 413) {
+            onNotify('Lỗi: Kích thước tệp sao lưu quá lớn so với giới hạn của máy chủ!', 'error');
+          } else {
+            onNotify(`Lỗi từ máy chủ (${res.status}): ${text.slice(0, 100)}`, 'error');
+          }
         }
-      } catch (err) {
-        onNotify('Lỗi đọc nội dung file sao lưu!', 'error');
+      } catch (err: any) {
+        onNotify('Lỗi đọc nội dung file sao lưu hoặc kết nối thất bại: ' + (err.message || err), 'error');
       } finally {
         setIsLoading(false);
         e.target.value = '';
