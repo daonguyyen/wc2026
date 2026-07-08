@@ -869,6 +869,107 @@ export default function App() {
 
               {activeTab === 'LEADERBOARD' && (
                 <div className="space-y-6">
+                  {/* MAGNIFICENT SYSTEM-WIDE TOTAL SCORE AND ORACLE STATS BOARD */}
+                  <motion.div 
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
+                    className="relative bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/20 border border-emerald-500/30 rounded-3xl p-6 md:p-8 shadow-2xl overflow-hidden group hover:border-emerald-500/50 transition-all duration-300"
+                  >
+                    {/* Glowing ambient blobs */}
+                    <div className="absolute -left-12 -top-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+                    <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-yellow-500/10 rounded-full blur-3xl pointer-events-none" />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-16 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
+                    
+                    {/* Tiny animated dots representing system synchronization */}
+                    <div className="absolute top-4 right-4 flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-950/60 border border-slate-800/80 backdrop-blur-sm select-none">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 absolute"></span>
+                      <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest font-bold">Trạng Thái: Trực Tuyến</span>
+                    </div>
+
+                    <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                      
+                      {/* Left: Beautiful big total score display */}
+                      <div className="space-y-2.5">
+                        <div className="flex items-center space-x-2 text-amber-400">
+                          <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse animate-duration-1000" />
+                          <span className="text-xs font-black uppercase tracking-widest text-slate-300 font-sans">
+                            CỘNG ĐỒNG TIÊN TRI • WORLD CUP 2026
+                          </span>
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-black text-white font-display uppercase tracking-tight leading-none">
+                          TỔNG ĐIỂM SỐ DỰ ĐOÁN TÍCH LŨY
+                        </h2>
+                        <p className="text-xs text-slate-400 leading-relaxed max-w-xl font-medium">
+                          Tổng hợp toàn bộ điểm số từ tất cả người chơi trong hệ thống. <span className="text-emerald-400 font-semibold">Càng ít điểm phạt, độ nhạy bén và độ điếm thúi càng cao!</span> Hãy cùng chung sức giữ vững phong độ tiên tri tối thượng!
+                        </p>
+                      </div>
+
+                      {/* Right: Big Magnificent Number of Total Score and Sub Stats */}
+                      <div className="flex items-center gap-6 shrink-0 bg-slate-950/50 border border-slate-800/40 p-4 md:p-6 rounded-2xl">
+                        <div className="text-center relative">
+                          <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">TỔNG ĐIỂM HỆ THỐNG</span>
+                          <span className="block text-4xl md:text-5xl font-black font-display text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-amber-400 to-emerald-400 drop-shadow-lg tracking-tight select-all">
+                            {leaderboard.reduce((sum, entry) => sum + entry.score, 0)}
+                          </span>
+                          <span className="block text-[10px] font-mono text-amber-500 font-bold mt-1.5 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full inline-block">
+                            Điểm phạt tích lũy
+                          </span>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Bento grids showing extra aggregated statistics for extreme magnificence */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 md:mt-8 pt-6 border-t border-slate-800/80">
+                      
+                      <div className="bg-slate-950/40 border border-slate-850/60 p-4 rounded-2xl hover:border-emerald-500/30 transition duration-300">
+                        <div className="flex items-center space-x-2 text-slate-500 mb-1.5">
+                          <Users className="w-4 h-4 text-emerald-400" />
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Tổng Nhân Sự</span>
+                        </div>
+                        <span className="block font-mono text-xl md:text-2xl font-black text-slate-100">{leaderboard.length}</span>
+                        {/* <span className="text-[9px] text-slate-400 font-medium">Số lượng Nhà tiên tri</span> */}
+                      </div>
+
+                      <div className="bg-slate-950/40 border border-slate-850/60 p-4 rounded-2xl hover:border-emerald-500/30 transition duration-300">
+                        <div className="flex items-center space-x-2 text-slate-500 mb-1.5">
+                          <Calendar className="w-4 h-4 text-emerald-450" />
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 font-sans">Tổng Bình Chọn</span>
+                        </div>
+                        <span className="block font-mono text-xl md:text-2xl font-black text-slate-100">
+                          {leaderboard.reduce((sum, entry) => sum + entry.predictedCount, 0)}
+                        </span>
+                        {/* <span className="text-[9px] text-slate-400 font-medium">Tổng lượt dự đoán</span> */}
+                      </div>
+
+                      <div className="bg-slate-950/40 border border-slate-850/60 p-4 rounded-2xl hover:border-emerald-500/30 transition duration-300">
+                        <div className="flex items-center space-x-2 text-emerald-400 mb-1.5">
+                          <Trophy className="w-4 h-4 text-emerald-400" />
+                          <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">Tổng Đoán Đúng</span>
+                        </div>
+                        <span className="block font-mono text-xl md:text-2xl font-black text-emerald-400">
+                          {leaderboard.reduce((sum, entry) => sum + entry.correctCount, 0)}
+                        </span>
+                        {/* <span className="text-[9px] text-slate-400 font-medium">Tổng số trận đoán đúng</span> */}
+                      </div>
+
+                      <div className="bg-slate-950/40 border border-slate-850/60 p-4 rounded-2xl hover:border-emerald-500/30 transition duration-300">
+                        <div className="flex items-center space-x-2 text-slate-500 mb-1.5">
+                          <Activity className="w-4 h-4 text-emerald-400" />
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Điểm Trung Bình</span>
+                        </div>
+                        <span className="block font-mono text-xl md:text-2xl font-black text-slate-100">
+                          {leaderboard.length > 0 ? (leaderboard.reduce((sum, entry) => sum + entry.score, 0) / leaderboard.length).toFixed(1) : '0'}đ
+                        </span>
+                        {/* <span className="text-[9px] text-slate-400 font-medium">Phạt bình quân mỗi người</span> */}
+                      </div>
+
+                    </div>
+
+                  </motion.div>
+
                   {/* Top 3 Honor Board Podium */}
                   {leaderboard.length >= 3 && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end pt-4 pb-2">
