@@ -218,6 +218,15 @@ export default function AdminPanel({
   const matchupPageSize = 8;
   const [matchupSearchQuery, setMatchupSearchQuery] = useState('');
 
+  // States for standalone exhibition matches
+  const [exHomeTeam, setExHomeTeam] = useState('');
+  const [exAwayTeam, setExAwayTeam] = useState('');
+  const [exMatchTime, setExMatchTime] = useState('');
+  const [exStage, setExStage] = useState('Trận ngoài lề');
+  const [exNote, setExNote] = useState('Trận ngoài lề riêng lẻ (Đúng: -1đ | Sai: +1đ)');
+  const [exHandicapFavored, setExHandicapFavored] = useState<'HOME' | 'AWAY' | 'NONE'>('NONE');
+  const [exHandicapValue, setExHandicapValue] = useState<number>(0);
+
   // States for player reading
   const [playersList, setPlayersList] = useState<{ name: string; code: string; score: number; createdAt: string }[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(false);
@@ -433,12 +442,35 @@ export default function AdminPanel({
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const raw = event.target?.result as string;
-        const backupDataObj = JSON.parse(raw);
-        
-        if (!backupDataObj.players || !backupDataObj.predictions) {
-          onNotify('Tệp sao lưu không đúng cấu trúc (thiếu players hoặc predictions)!', 'error');
+        let raw = event.target?.result as string;
+        if (!raw) {
+          onNotify('File sao lưu rỗng!', 'error');
           return;
+        }
+
+        // Clean UTF-8 Byte Order Mark (BOM) if present
+        if (raw.charCodeAt(0) === 0xFEFF) {
+          raw = raw.slice(1);
+        }
+
+        let backupDataObj: any;
+        try {
+          backupDataObj = JSON.parse(raw.trim());
+        } catch (jsonErr: any) {
+          onNotify(`Tệp JSON bị lỗi cú pháp không thể đọc: ${jsonErr.message}`, 'error');
+          return;
+        }
+
+        if (!backupDataObj || typeof backupDataObj !== 'object') {
+          onNotify('Nội dung tệp sao lưu không phải là định dạng JSON Object hợp lệ!', 'error');
+          return;
+        }
+
+        // Handle nested wrapped JSON objects
+        if (backupDataObj.backupData && typeof backupDataObj.backupData === 'object') {
+          backupDataObj = backupDataObj.backupData;
+        } else if (backupDataObj.data && typeof backupDataObj.data === 'object') {
+          backupDataObj = backupDataObj.data;
         }
         
         setIsLoading(true);
@@ -455,19 +487,19 @@ export default function AdminPanel({
         if (contentType && contentType.includes('application/json')) {
           const data = await res.json();
           if (res.ok) {
-            onNotify(data.message || 'Import dữ liệu thành công!', 'success');
+            onNotify(data.message || 'Khôi phục và Import dữ liệu thành công!', 'success');
             onRefresh();
             fetchPlayersList();
             fetchPredictionsHistory();
             fetchOutrightConfig();
             fetchBackupsList();
           } else {
-            onNotify(data.error || 'Lỗi khi import', 'error');
+            onNotify(data.error || 'Lỗi khi import dữ liệu sao lưu', 'error');
           }
         } else {
           const text = await res.text();
           if (res.status === 413) {
-            onNotify('Lỗi: Kích thước tệp sao lưu quá lớn so với giới hạn của máy chủ!', 'error');
+            onNotify('Lỗi: Kích thước tệp sao lưu quá lớn so with giới hạn máy chủ!', 'error');
           } else {
             onNotify(`Lỗi từ máy chủ (${res.status}): ${text.slice(0, 100)}`, 'error');
           }
@@ -705,6 +737,77 @@ export default function AdminPanel({
         onRefresh();
       } else {
         onNotify(data.error || 'Lỗi cập nhật thông tin trận đấu', 'error');
+      }
+    } catch (e) {
+      onNotify('Lỗi kết nối máy chủ', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Create standalone exhibition match
+  const handleCreateExhibitionMatch = async () => {
+    if (!exHomeTeam.trim() || !exAwayTeam.trim()) {
+      onNotify('Vui lòng nhập tên Đội Nhà và Đội Khách!', 'error');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/matches/create-exhibition', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode || '',
+        },
+        body: JSON.stringify({
+          adminCode,
+          homeTeam: exHomeTeam,
+          awayTeam: exAwayTeam,
+          matchTime: exMatchTime ? new Date(exMatchTime).toISOString() : new Date().toISOString(),
+          stage: exStage,
+          note: exNote,
+          handicapFavored: exHandicapFavored,
+          handicapValue: exHandicapValue,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify(data.message || 'Tạo trận ngoài lề riêng lẻ thành công!', 'success');
+        setExHomeTeam('');
+        setExAwayTeam('');
+        setExMatchTime('');
+        onRefresh();
+      } else {
+        onNotify(data.error || 'Lỗi tạo trận ngoài lề', 'error');
+      }
+    } catch (e) {
+      onNotify('Lỗi kết nối máy chủ', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Delete standalone exhibition match
+  const handleDeleteExhibitionMatch = async (matchId: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/matches/delete-exhibition', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-code': adminCode || '',
+        },
+        body: JSON.stringify({
+          adminCode,
+          matchId,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onNotify(data.message || 'Xóa trận ngoài lề thành công!', 'success');
+        onRefresh();
+      } else {
+        onNotify(data.error || 'Lỗi khi xóa trận ngoài lề', 'error');
       }
     } catch (e) {
       onNotify('Lỗi kết nối máy chủ', 'error');
@@ -1497,6 +1600,173 @@ export default function AdminPanel({
             </div>
           </div>
         )}
+      </div>
+
+      {/* SECTION: CREATE & MANAGE STANDALONE EXHIBITION MATCHES */}
+      <div className="bg-slate-900 border border-purple-500/30 rounded-3xl p-6 shadow-xl space-y-5">
+        <div className="flex items-center space-x-3 pb-2 border-b border-slate-800/60">
+          <div className="p-2.5 bg-purple-500/10 rounded-2xl text-purple-400 font-sans">
+            <span className="text-xl">⭐</span>
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-100 font-display">Tạo Trận Ngoài Lề Riêng Lẻ</h2>
+            <p className="text-[11px] text-purple-300 mt-0.5">
+              Tạo trận đấu ngoài lề riêng lẻ với quy tắc tính điểm đặc biệt: <strong>Đoán Đúng được -1 điểm</strong> (khấu trừ) | <strong>Đoán Sai / Bỏ lỡ bị +1 điểm</strong>.
+            </p>
+          </div>
+        </div>
+
+        {/* Exhibition Match Creation Form */}
+        <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-purple-400">Tạo trận đấu ngoài lề mới</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 mb-1">Đội Nhà (Home Team)</label>
+              <input
+                type="text"
+                placeholder="Ví dụ: Đội A / CLB Manchester City"
+                value={exHomeTeam}
+                onChange={(e) => setExHomeTeam(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 mb-1">Đội Khách (Away Team)</label>
+              <input
+                type="text"
+                placeholder="Ví dụ: Đội B / CLB Real Madrid"
+                value={exAwayTeam}
+                onChange={(e) => setExAwayTeam(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 mb-1">Thời Gian Thi Đấu</label>
+              <input
+                type="datetime-local"
+                value={exMatchTime ? toDatetimeLocal(exMatchTime) : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val) setExMatchTime(new Date(val).toISOString());
+                  else setExMatchTime('');
+                }}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 mb-1">Tên / Giai Đoạn Trận Ngoài Lề</label>
+              <input
+                type="text"
+                placeholder="Mặc định: Trận ngoài lề"
+                value={exStage}
+                onChange={(e) => setExStage(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 mb-1">Kèo Chấp Kèm Theo (Ngoại lề)</label>
+              <div className="flex space-x-2">
+                <select
+                  value={exHandicapFavored}
+                  onChange={(e) => setExHandicapFavored(e.target.value as any)}
+                  className="bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl px-2 py-2 focus:outline-none focus:border-purple-500"
+                >
+                  <option value="NONE">Đồng banh (0)</option>
+                  <option value="HOME">Đội nhà chấp</option>
+                  <option value="AWAY">Đội khách chấp</option>
+                </select>
+                {exHandicapFavored !== 'NONE' && (
+                  <input
+                    type="number"
+                    step="0.25"
+                    min="0"
+                    value={exHandicapValue}
+                    onChange={(e) => setExHandicapValue(Number(e.target.value))}
+                    className="w-20 bg-slate-900 border border-slate-800 text-amber-400 font-mono font-bold text-xs rounded-xl px-2 py-2 text-center"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 mb-1">Ghi Chú Trận</label>
+              <input
+                type="text"
+                placeholder="Mô tả phụ cho trận..."
+                value={exNote}
+                onChange={(e) => setExNote(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-purple-500"
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={handleCreateExhibitionMatch}
+              disabled={isLoading}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-purple-950/30 flex items-center space-x-2 active:scale-95 cursor-pointer"
+            >
+              <span>⭐ Tạo Trận Ngoài Lề Ngay</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Existing Exhibition Matches List */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Danh sách các trận ngoài lề đã tạo</h3>
+          
+          {matches.filter(m => m.isExhibition || (m.stage && m.stage.startsWith('Trận ngoài lề'))).length === 0 ? (
+            <div className="text-center py-6 text-slate-500 text-xs italic bg-slate-950 rounded-2xl border border-slate-850">
+              Chưa có trận ngoài lề riêng lẻ nào được tạo.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {matches
+                .filter(m => m.isExhibition || (m.stage && m.stage.startsWith('Trận ngoài lề')))
+                .map(m => (
+                  <div key={m.id} className="bg-slate-950 p-4 rounded-2xl border border-purple-500/20 space-y-3 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="bg-purple-500/15 text-purple-300 text-[9.5px] font-black uppercase px-2 py-0.5 rounded border border-purple-500/30">
+                        {m.stage}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-500">Mã: {m.id}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between font-bold text-sm text-slate-100">
+                      <span>{m.homeTeam}</span>
+                      <span className="text-xs text-purple-400 font-mono font-black">
+                        {m.status === 'FINISHED' ? `${m.homeScore} - ${m.awayScore}` : 'VS'}
+                      </span>
+                      <span>{m.awayTeam}</span>
+                    </div>
+
+                    <div className="text-[10.5px] text-slate-400 flex items-center justify-between">
+                      <span>{new Date(m.matchTime).toLocaleString('vi-VN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-purple-300 font-semibold">{m.note || 'Đúng: -1đ | Sai: +1đ'}</span>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-900 flex justify-end space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteExhibitionMatch(m.id)}
+                        disabled={isLoading}
+                        className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-3 py-1 rounded-xl text-[10.5px] font-bold transition active:scale-95 cursor-pointer flex items-center space-x-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Xóa trận</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Match Scores Input Section (Bento Rounded 3xl) */}

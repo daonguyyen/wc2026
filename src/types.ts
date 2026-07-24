@@ -33,6 +33,8 @@ export interface Match {
   handicapFavored?: "HOME" | "AWAY" | "NONE";
   handicapValue?: number;
   isCustomized?: boolean;
+  isExhibition?: boolean;
+  note?: string;
 }
 
 export interface MatchOdds {
