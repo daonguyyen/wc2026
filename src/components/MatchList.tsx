@@ -219,7 +219,7 @@ export default function MatchList({
   isAdminUser = false,
 }: MatchListProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [stageFilter, setStageFilter] = useState<'ALL' | 'GROUP' | 'PLAYOFF'>('ALL');
+  const [stageFilter, setStageFilter] = useState<'ALL' | 'GROUP' | 'PLAYOFF' | 'EXHIBITION'>('ALL');
   const [predictionTypeFilter, setPredictionTypeFilter] = useState<'ALL' | 'VOTED' | 'NOT_VOTED' | 'OPEN'>('ALL');
   const [showHiddenByAdmin, setShowHiddenByAdmin] = useState(false);
 
@@ -244,8 +244,9 @@ export default function MatchList({
     }
 
     // 2. Stage Filter
-    if (stageFilter === 'GROUP' && !m.stage.startsWith('Vòng bảng')) return false;
-    if (stageFilter === 'PLAYOFF' && m.stage.startsWith('Vòng bảng')) return false;
+    if (stageFilter === 'GROUP' && (!m.stage.startsWith('Vòng bảng') || m.isExhibition)) return false;
+    if (stageFilter === 'PLAYOFF' && (m.stage.startsWith('Vòng bảng') || m.isExhibition)) return false;
+    if (stageFilter === 'EXHIBITION' && !m.isExhibition && (!m.stage || !m.stage.startsWith('Trận ngoài lề'))) return false;
 
     // 3. User Vote Status Filter
     if (playerPhone) {
@@ -382,25 +383,31 @@ export default function MatchList({
             />
           </div>
 
-          {/* Group vs Playoff Filter Row (Bento styled capsule) */}
-          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800/80 shrink-0 select-none">
+          {/* Group vs Playoff vs Exhibition Filter Row (Bento styled capsule) */}
+          <div className="flex flex-wrap rounded-xl bg-slate-950 p-1 border border-slate-800/80 shrink-0 select-none gap-1">
             <button
               onClick={() => setStageFilter('ALL')}
-              className={`text-[11px] font-semibold px-4 py-2 rounded-lg transition-all ${stageFilter === 'ALL' ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-all ${stageFilter === 'ALL' ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' : 'text-slate-400 hover:text-slate-200'}`}
             >
-              Tất cả (104)
+              Tất cả
             </button>
             <button
               onClick={() => setStageFilter('GROUP')}
-              className={`text-[11px] font-semibold px-4 py-2 rounded-lg transition-all ${stageFilter === 'GROUP' ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-all ${stageFilter === 'GROUP' ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' : 'text-slate-400 hover:text-slate-200'}`}
             >
-              Vòng Bảng (72)
+              Vòng Bảng
             </button>
             <button
               onClick={() => setStageFilter('PLAYOFF')}
-              className={`text-[11px] font-semibold px-4 py-2 rounded-lg transition-all ${stageFilter === 'PLAYOFF' ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-all ${stageFilter === 'PLAYOFF' ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' : 'text-slate-400 hover:text-slate-200'}`}
             >
-              Knockout (32)
+              Knockout
+            </button>
+            <button
+              onClick={() => setStageFilter('EXHIBITION')}
+              className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-all ${stageFilter === 'EXHIBITION' ? 'bg-purple-900/60 text-purple-200 shadow-md border border-purple-500/40' : 'text-purple-400 hover:text-purple-300'}`}
+            >
+              ⭐ Trận Ngoài Lề
             </button>
           </div>
         </div>
@@ -521,6 +528,11 @@ export default function MatchList({
                       {m.visible === false && (
                         <span className="bg-rose-500/15 text-rose-400 text-[8.5px] font-black uppercase px-2 py-0.5 rounded border border-rose-500/25">
                           Đang Ẩn 👁️‍🗨️
+                        </span>
+                      )}
+                      {m.isExhibition && (
+                        <span className="bg-purple-500/20 text-purple-300 text-[8.5px] font-black uppercase px-2 py-0.5 rounded border border-purple-500/40">
+                          ⭐ Trận ngoài lề (Đúng: -1đ | Sai: +1đ)
                         </span>
                       )}
                       <span className="text-[11px] font-semibold text-emerald-400">

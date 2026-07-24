@@ -677,6 +677,7 @@ export default function App() {
                     <ul className="text-[11px] text-slate-400 space-y-2.5 list-disc pl-4 pr-1 leading-relaxed pt-3 border-t border-slate-800/60 font-sans mt-3">
                       <li>Đăng nhập để lưu dự đoán trận đấu & dự đoán chung cuộc (outrights).</li>
                       <li><strong>Cách tính điểm:</strong> Mỗi dự đoán <span className="text-rose-400 font-semibold">Sai hoặc Quên bình chọn</span> khi khóa cửa nhận <span className="text-rose-400 font-semibold">+1 điểm</span>, đoán đúng nhận <span className="text-emerald-400 font-semibold">0 điểm</span>. <strong>Ai ít điểm nhất sẽ thắng cuộc!</strong></li>
+                      <li><strong>Trận ngoài lề riêng lẻ:</strong> Đoán đúng được <span className="text-emerald-400 font-semibold">trừ -1 điểm</span> vào điểm tổng, đoán sai hoặc quên bình chọn bị <span className="text-rose-400 font-semibold">+1 điểm</span>.</li>
                       <li><strong>Khấu trừ dài hạn:</strong> Đoán đúng Champion được <span className="text-emerald-400 font-bold">trừ -10đ</span>, đúng Vua phá lưới / Găng tay Vàng / Quả bóng Vàng được <span className="text-emerald-400 font-bold">trừ -5đ</span> vào điểm tổng.</li>
                       <li>Mở khóa dự đoán dài hạn trước <strong>00h00 ngày 19/06/2026</strong>. Sau giờ này sẽ khóa 🔒.</li>
                     </ul>
@@ -685,7 +686,7 @@ export default function App() {
               </AnimatePresence>
             </div>
 
-            {/* VIP HALL OF FAME: TOP 3 LOWEST POINTS LAST SEASON */}
+            {/* VIP HALL OF FAME: TOP 3 LOWEST POINTS BASED ON LATEST RESULTS */}
             <div id="hall-of-fame-block" className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-amber-500/10 transition-all duration-300 -mr-10 -mt-10" />
               
@@ -695,48 +696,82 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-xs font-black text-slate-100 uppercase tracking-wider font-display">
-                    Bảng Vàng Mùa Trước 🎖️
+                    Bảng Vàng Tiên Tri 🎖️
                   </h3>
-                  <p className="text-[10px] text-slate-400 mt-0.5 select-none leading-tight">Vinh danh Top 3 nhà tiên tri siêu phòng ngự ít điểm nhất</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5 select-none leading-tight">Cập nhật dựa theo kết quả hiện tại gần nhất</p>
                 </div>
               </div>
 
               <div className="space-y-3 pt-1">
-                {[
+                {(leaderboard.length >= 3 ? [
                   {
-                    name: 'E Bo',
-                    points: 27,
+                    name: leaderboard[0].name,
+                    points: leaderboard[0].score,
                     rank: 1,
                     title: 'Quán Quân Toàn Khóa 🏆',
                     medal: '🥇 Quán Quân',
                     bgColor: 'from-amber-400/15 via-amber-500/5 to-transparent border-amber-500/30',
                     textColor: 'text-amber-400',
                     outlineColor: 'shadow-amber-500/5',
-                    description: 'Chiến thần phòng ngự tối cao! Hoàn thành mùa giải trước với số điểm phạt vỏn vẹn 27đ - kỷ lục bất bại vượt qua mọi bão táp vòng bảng.'
+                    description: `Chiến thần tiên tri dẫn đầu bảng xếp hạng hiện tại với số điểm phạt vỏn vẹn ${leaderboard[0].score}đ - độ nhạy bén chiến thuật tối thượng!`
                   },
                   {
-                    name: 'E Bảy',
-                    points: 30,
+                    name: leaderboard[1].name,
+                    points: leaderboard[1].score,
                     rank: 2,
                     title: 'Á Quân Xuất Sắc 🥈',
                     medal: '🥈 Á Quân',
                     bgColor: 'from-slate-400/15 via-slate-500/5 to-transparent border-slate-400/25',
                     textColor: 'text-slate-200',
                     outlineColor: 'shadow-slate-400/5',
-                    description: 'Kiên cường bám đuổi sát nút với 30đ phạt. Sở hữu chiến lược né tránh rủi ro thượng thừa, xứng đáng lưu danh bảng vàng.'
+                    description: `Bám sát nút vị trí quán quân với ${leaderboard[1].score}đ phạt. Tỷ lệ dự đoán chính xác cực kỳ đáng nể!`
                   },
                   {
-                    name: 'A Bop',
-                    points: 34,
+                    name: leaderboard[2].name,
+                    points: leaderboard[2].score,
                     rank: 3,
                     title: 'Hạng Ba Danh Giá 🥉',
                     medal: '🥉 Hạng Ba',
                     bgColor: 'from-amber-700/15 via-amber-800/5 to-transparent border-amber-700/20',
                     textColor: 'text-amber-500',
                     outlineColor: 'shadow-amber-700/5',
-                    description: 'Tận dụng tuyệt đối quyền năng dự đoán chính xác để cán mốc 34đ phạt. Án ngữ bục vinh quang thứ ba đầy ngoạn mục!'
+                    description: `Cán mốc ${leaderboard[2].score}đ phạt. Án ngữ bục vinh quang thứ ba đầy ngoạn mục!`
                   }
-                ].map((member) => (
+                ] : [
+                  {
+                    name: leaderboard[0]?.name || 'E Bo',
+                    points: leaderboard[0]?.score ?? 27,
+                    rank: 1,
+                    title: 'Quán Quân Toàn Khóa 🏆',
+                    medal: '🥇 Quán Quân',
+                    bgColor: 'from-amber-400/15 via-amber-500/5 to-transparent border-amber-500/30',
+                    textColor: 'text-amber-400',
+                    outlineColor: 'shadow-amber-500/5',
+                    description: 'Chiến thần phòng ngự tối cao! Hoàn thành mùa giải với số điểm phạt vỏn vẹn ít nhất - kỷ kỷ lục bất bại vượt qua mọi bão táp.'
+                  },
+                  {
+                    name: leaderboard[1]?.name || 'E Bảy',
+                    points: leaderboard[1]?.score ?? 30,
+                    rank: 2,
+                    title: 'Á Quân Xuất Sắc 🥈',
+                    medal: '🥈 Á Quân',
+                    bgColor: 'from-slate-400/15 via-slate-500/5 to-transparent border-slate-400/25',
+                    textColor: 'text-slate-200',
+                    outlineColor: 'shadow-slate-400/5',
+                    description: 'Kiên cường bám đuổi sát nút. Sở hữu chiến lược né tránh rủi ro thượng thừa, xứng đáng lưu danh bảng vàng.'
+                  },
+                  {
+                    name: leaderboard[2]?.name || 'A Bop',
+                    points: leaderboard[2]?.score ?? 34,
+                    rank: 3,
+                    title: 'Hạng Ba Danh Giá 🥉',
+                    medal: '🥉 Hạng Ba',
+                    bgColor: 'from-amber-700/15 via-amber-800/5 to-transparent border-amber-700/20',
+                    textColor: 'text-amber-500',
+                    outlineColor: 'shadow-amber-700/5',
+                    description: 'Tận dụng tuyệt đối quyền năng dự đoán chính xác. Án ngữ bục vinh quang thứ ba đầy ngoạn mục!'
+                  }
+                ]).map((member) => (
                   <button
                     key={member.rank}
                     type="button"
@@ -756,7 +791,7 @@ export default function App() {
                     </div>
                     <div className="text-right flex flex-col items-end">
                       <div className="font-mono font-black text-xs text-emerald-400">{member.points}đ</div>
-                      <span className="text-[8px] text-slate-500 tracking-wider">Mùa trước</span>
+                      <span className="text-[8px] text-emerald-400/80 font-bold tracking-wider">Hiện tại</span>
                     </div>
                   </button>
                 ))}
@@ -902,7 +937,7 @@ export default function App() {
                           TỔNG ĐIỂM SỐ DỰ ĐOÁN TÍCH LŨY
                         </h2>
                         <p className="text-xs text-slate-400 leading-relaxed max-w-xl font-medium">
-                          Tổng hợp toàn bộ điểm số từ tất cả người chơi trong hệ thống. <span className="text-emerald-400 font-semibold">Càng ít điểm phạt, độ nhạy bén và độ điếm thúi càng cao!</span> Hãy cùng chung sức giữ vững phong độ tiên tri tối thượng!
+                          Tổng hợp toàn bộ điểm số từ tất cả người chơi trong hệ thống. <span className="text-emerald-400 font-semibold">Càng ít điểm phạt, độ nhạy bén và phòng ngự chiến thuật càng cao!</span> Hãy cùng chung sức giữ vững phong độ tiên tri tối thượng!
                         </p>
                       </div>
 
@@ -930,7 +965,7 @@ export default function App() {
                           <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Tổng Nhân Sự</span>
                         </div>
                         <span className="block font-mono text-xl md:text-2xl font-black text-slate-100">{leaderboard.length}</span>
-                        {/* <span className="text-[9px] text-slate-400 font-medium">Số lượng Nhà tiên tri</span> */}
+                        <span className="text-[9px] text-slate-400 font-medium">Nhà tiên tri hoạt động</span>
                       </div>
 
                       <div className="bg-slate-950/40 border border-slate-850/60 p-4 rounded-2xl hover:border-emerald-500/30 transition duration-300">
@@ -941,7 +976,7 @@ export default function App() {
                         <span className="block font-mono text-xl md:text-2xl font-black text-slate-100">
                           {leaderboard.reduce((sum, entry) => sum + entry.predictedCount, 0)}
                         </span>
-                        {/* <span className="text-[9px] text-slate-400 font-medium">Tổng lượt dự đoán</span> */}
+                        <span className="text-[9px] text-slate-400 font-medium">Lượt dự đoán đã nộp</span>
                       </div>
 
                       <div className="bg-slate-950/40 border border-slate-850/60 p-4 rounded-2xl hover:border-emerald-500/30 transition duration-300">
@@ -952,7 +987,7 @@ export default function App() {
                         <span className="block font-mono text-xl md:text-2xl font-black text-emerald-400">
                           {leaderboard.reduce((sum, entry) => sum + entry.correctCount, 0)}
                         </span>
-                        {/* <span className="text-[9px] text-slate-400 font-medium">Tổng số trận đoán đúng</span> */}
+                        <span className="text-[9px] text-slate-400 font-medium">Trận đoán trúng tuyệt đối</span>
                       </div>
 
                       <div className="bg-slate-950/40 border border-slate-850/60 p-4 rounded-2xl hover:border-emerald-500/30 transition duration-300">
@@ -963,7 +998,7 @@ export default function App() {
                         <span className="block font-mono text-xl md:text-2xl font-black text-slate-100">
                           {leaderboard.length > 0 ? (leaderboard.reduce((sum, entry) => sum + entry.score, 0) / leaderboard.length).toFixed(1) : '0'}đ
                         </span>
-                        {/* <span className="text-[9px] text-slate-400 font-medium">Phạt bình quân mỗi người</span> */}
+                        <span className="text-[9px] text-slate-400 font-medium">Phạt bình quân mỗi người</span>
                       </div>
 
                     </div>

@@ -527,12 +527,13 @@ function recalculateAllScores() {
   if (!db.outrightResults) db.outrightResults = { champion: "", goldenBoot: "", goldenGlove: "", goldenBall: "" };
   if (!db.outrightEvaluations) db.outrightEvaluations = {};
 
-  // For each prediction that was finished, update points: correct => 0, incorrect => 1
+  // For each prediction that was finished, update points: correct => 0 (or -1 for exhibition), incorrect => 1
   for (const pred of Object.values(db.predictions)) {
     const match = db.matches.find((m) => m.id === pred.matchId);
     if (match && match.status === "FINISHED") {
       const isCorrect = pred.prediction === match.winner;
-      pred.points = isCorrect ? 0 : 1; // 0 points for correct, 1 point for incorrect
+      const isExhibition = match.isExhibition || (match.stage && typeof match.stage === "string" && match.stage.startsWith("Trận ngoài lề"));
+      pred.points = isExhibition ? (isCorrect ? -1 : 1) : isCorrect ? 0 : 1;
       pred.evaluated = true;
     }
   }
@@ -541,9 +542,11 @@ function recalculateAllScores() {
   const now = getCurrentTime();
   for (const phone of Object.keys(db.players)) {
     let incorrectCount = 0;
+    let deductions = 0;
 
     for (const match of db.matches) {
       const matchTime = new Date(match.matchTime);
+      const isExhibition = match.isExhibition || (match.stage && typeof match.stage === "string" && match.stage.startsWith("Trận ngoài lề"));
       const limitMinutes = match.stage && typeof match.stage === "string" && match.stage.startsWith("Vòng bảng") ? 15 : 7;
       const lockTime = new Date(matchTime.getTime() + limitMinutes * 60 * 1000);
       const isLocked = now > lockTime || match.status === "FINISHED";
@@ -551,21 +554,35 @@ function recalculateAllScores() {
       if (isLocked) {
         const predKey = `${phone}_${match.id}`;
         const pred = db.predictions[predKey];
-        if (pred) {
-          // If match is finished, check if prediction was incorrect (points > 0)
+
+        if (isExhibition) {
+          // Trận ngoài lề riêng lẻ: Đúng được -1 điểm, Sai hoặc bỏ lỡ bị +1 điểm
           if (match.status === "FINISHED") {
-            if (pred.points > 0) {
-              incorrectCount++;
+            if (pred) {
+              if (pred.prediction === match.winner) {
+                deductions += 1; // Khấu trừ -1 điểm vào tổng
+              } else {
+                incorrectCount += 1; // Đoán sai => +1 điểm phạt
+              }
+            } else {
+              incorrectCount += 1; // Bỏ lỡ dự đoán => +1 điểm phạt
             }
           }
         } else {
-          // No prediction made (forgotten/skipped) on a locked match => counts as failure (+1 point)
-          incorrectCount++;
+          // Trận đấu chính thức World Cup
+          if (pred) {
+            if (match.status === "FINISHED") {
+              if (pred.points > 0) {
+                incorrectCount++;
+              }
+            }
+          } else {
+            incorrectCount++;
+          }
         }
       }
     }
 
-    let deductions = 0;
     const outright = db.outrightPredictions[phone];
     const evalResult = db.outrightEvaluations[phone];
     const results = db.outrightResults;
@@ -1403,6 +1420,79 @@ app.post("/api/admin/matches/update-details", (req, res) => {
   res.json({ message: "Cập nhật thông tin trận đấu thành công!", match });
 });
 
+// 12.6. Create standalone exhibition match (Admin only)
+app.post("/api/admin/matches/create-exhibition", (req, res) => {
+  if (!isAdmin(req)) {
+    return res.status(403).json({ error: "Quyền admin bị từ chối! Chức năng này chỉ dành cho tài khoản Admin." });
+  }
+
+  const { homeTeam, awayTeam, matchTime, stage, note, handicapFavored, handicapValue } = req.body;
+
+  if (!homeTeam || !awayTeam) {
+    return res.status(400).json({ error: "Vui lòng nhập tên Đội Nhà và Đội Khách!" });
+  }
+
+  const newId = `ex_${Date.now()}`;
+  const cleanStage = stage && typeof stage === "string" && stage.trim() ? stage.trim() : "Trận ngoài lề";
+
+  const exhibitionMatch: Match = {
+    id: newId,
+    homeTeam: homeTeam.trim(),
+    awayTeam: awayTeam.trim(),
+    matchTime: matchTime && typeof matchTime === "string" ? matchTime : toGMT7String(getCurrentTime()),
+    status: "SCHEDULED",
+    stage: cleanStage.startsWith("Trận ngoài lề") ? cleanStage : `Trận ngoài lề - ${cleanStage}`,
+    visible: true,
+    isCustomized: true,
+    isExhibition: true,
+    note: note && typeof note === "string" ? note.trim() : "Trận ngoài lề riêng lẻ (Đúng: -1đ | Sai: +1đ)",
+    handicapFavored: handicapFavored && ["HOME", "AWAY", "NONE"].includes(handicapFavored) ? handicapFavored : "NONE",
+    handicapValue: handicapValue !== undefined ? Number(handicapValue) || 0 : 0,
+  };
+
+  db.matches.push(exhibitionMatch);
+  recalculateAllScores();
+  saveDB();
+
+  res.json({
+    message: "Tạo trận ngoài lề riêng lẻ thành công!",
+    match: exhibitionMatch,
+  });
+});
+
+// 12.7. Delete standalone exhibition match (Admin only)
+app.post("/api/admin/matches/delete-exhibition", (req, res) => {
+  if (!isAdmin(req)) {
+    return res.status(403).json({ error: "Quyền admin bị từ chối! Chức năng này chỉ dành cho tài khoản Admin." });
+  }
+
+  const { matchId } = req.body;
+  if (!matchId) {
+    return res.status(400).json({ error: "Thiếu mã trận đấu cần xóa" });
+  }
+
+  const idx = db.matches.findIndex((m) => m.id === String(matchId));
+  if (idx === -1) {
+    return res.status(404).json({ error: "Không tìm thấy trận đấu cần xóa" });
+  }
+
+  const deletedMatch = db.matches.splice(idx, 1)[0];
+
+  // Remove predictions related to this deleted match
+  for (const predKey of Object.keys(db.predictions)) {
+    if (predKey.endsWith(`_${matchId}`)) {
+      delete db.predictions[predKey];
+    }
+  }
+
+  recalculateAllScores();
+  saveDB();
+
+  res.json({
+    message: `Đã xóa trận ngoài lề (${deletedMatch.homeTeam} vs ${deletedMatch.awayTeam}) thành công!`,
+  });
+});
+
 // 13. Toggle match visibility dynamically (Admin only)
 app.post("/api/admin/matches/toggle-visibility", (req, res) => {
   if (!isAdmin(req)) {
@@ -1671,14 +1761,17 @@ app.post("/api/admin/backups/import-direct", (req, res) => {
     return res.status(403).json({ error: "Quyền admin bị từ chối! Chức năng này chỉ dành cho tài khoản Admin." });
   }
 
-  const { backupData } = req.body;
+  let { backupData } = req.body;
   if (!backupData || typeof backupData !== "object") {
     return res.status(400).json({ error: "Dữ liệu nhập trực tiếp không hợp lệ" });
   }
 
   try {
-    if (!backupData.players || !backupData.predictions) {
-      return res.status(400).json({ error: "Dữ liệu thiếu thông tin người dùng hoặc bình chọn" });
+    if (backupData.backupData && typeof backupData.backupData === "object") {
+      backupData = backupData.backupData;
+    }
+    if (backupData.data && typeof backupData.data === "object") {
+      backupData = backupData.data;
     }
 
     createAutomaticBackup("pre_import_undo");
@@ -1686,19 +1779,31 @@ app.post("/api/admin/backups/import-direct", (req, res) => {
     if (backupData.matches && Array.isArray(backupData.matches)) {
       db.matches = backupData.matches;
     }
-    db.players = backupData.players;
-    db.predictions = backupData.predictions;
-    db.outrightPredictions = backupData.outrightPredictions || {};
-    db.outrightResults = backupData.outrightResults || { champion: "", goldenBoot: "", goldenGlove: "", goldenBall: "" };
-    db.outrightEvaluations = backupData.outrightEvaluations || {};
-    db.adminCustomizedVisibility = backupData.adminCustomizedVisibility || {};
+    if (backupData.players && typeof backupData.players === "object") {
+      db.players = backupData.players;
+    }
+    if (backupData.predictions && typeof backupData.predictions === "object") {
+      db.predictions = backupData.predictions;
+    }
+    if (backupData.outrightPredictions && typeof backupData.outrightPredictions === "object") {
+      db.outrightPredictions = backupData.outrightPredictions;
+    }
+    if (backupData.outrightResults && typeof backupData.outrightResults === "object") {
+      db.outrightResults = backupData.outrightResults;
+    }
+    if (backupData.outrightEvaluations && typeof backupData.outrightEvaluations === "object") {
+      db.outrightEvaluations = backupData.outrightEvaluations;
+    }
+    if (backupData.adminCustomizedVisibility && typeof backupData.adminCustomizedVisibility === "object") {
+      db.adminCustomizedVisibility = backupData.adminCustomizedVisibility;
+    }
 
     recalculateAllScores();
     saveDB();
 
-    res.json({ message: "Đã nhập trực tiếp dữ liệu cấu trúc thành công!" });
+    res.json({ message: "Khôi phục và nhập dữ liệu từ tệp sao lưu JSON thành công!" });
   } catch (err: any) {
-    res.status(400).json({ error: "Lỗi khi nhập trực tiếp: " + err.message });
+    res.status(400).json({ error: "Lỗi khi khôi phục dữ liệu: " + err.message });
   }
 });
 
