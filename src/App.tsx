@@ -677,7 +677,7 @@ export default function App() {
                     <ul className="text-[11px] text-slate-400 space-y-2.5 list-disc pl-4 pr-1 leading-relaxed pt-3 border-t border-slate-800/60 font-sans mt-3">
                       <li>Đăng nhập để lưu dự đoán trận đấu & dự đoán chung cuộc (outrights).</li>
                       <li><strong>Cách tính điểm:</strong> Mỗi dự đoán <span className="text-rose-400 font-semibold">Sai hoặc Quên bình chọn</span> khi khóa cửa nhận <span className="text-rose-400 font-semibold">+1 điểm</span>, đoán đúng nhận <span className="text-emerald-400 font-semibold">0 điểm</span>. <strong>Ai ít điểm nhất sẽ thắng cuộc!</strong></li>
-                      <li><strong>Trận ngoài lề riêng lẻ:</strong> Đoán đúng được <span className="text-emerald-400 font-semibold">trừ -1 điểm</span> vào điểm tổng, đoán sai hoặc quên bình chọn bị <span className="text-rose-400 font-semibold">+1 điểm</span>.</li>
+                      <li><strong>Trận đấu thêm (Admin tạo):</strong> Đoán đúng nhận <span className="text-emerald-400 font-semibold">0 điểm</span> (không bị cộng điểm phạt), đoán sai hoặc quên bình chọn bị <span className="text-rose-400 font-semibold">+1 điểm phạt</span> như các trận World Cup.</li>
                       <li><strong>Khấu trừ dài hạn:</strong> Đoán đúng Champion được <span className="text-emerald-400 font-bold">trừ -10đ</span>, đúng Vua phá lưới / Găng tay Vàng / Quả bóng Vàng được <span className="text-emerald-400 font-bold">trừ -5đ</span> vào điểm tổng.</li>
                       <li>Mở khóa dự đoán dài hạn trước <strong>00h00 ngày 19/06/2026</strong>. Sau giờ này sẽ khóa 🔒.</li>
                     </ul>
