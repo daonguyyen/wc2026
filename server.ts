@@ -527,13 +527,12 @@ function recalculateAllScores() {
   if (!db.outrightResults) db.outrightResults = { champion: "", goldenBoot: "", goldenGlove: "", goldenBall: "" };
   if (!db.outrightEvaluations) db.outrightEvaluations = {};
 
-  // For each prediction that was finished, update points: correct => 0 (or -1 for exhibition), incorrect => 1
+  // For each prediction that was finished, update points: correct => 0, incorrect => 1
   for (const pred of Object.values(db.predictions)) {
     const match = db.matches.find((m) => m.id === pred.matchId);
     if (match && match.status === "FINISHED") {
       const isCorrect = pred.prediction === match.winner;
-      const isExhibition = match.isExhibition || (match.stage && typeof match.stage === "string" && match.stage.startsWith("Trận ngoài lề"));
-      pred.points = isExhibition ? (isCorrect ? -1 : 1) : isCorrect ? 0 : 1;
+      pred.points = isCorrect ? 0 : 1;
       pred.evaluated = true;
     }
   }
@@ -546,7 +545,7 @@ function recalculateAllScores() {
 
     for (const match of db.matches) {
       const matchTime = new Date(match.matchTime);
-      const isExhibition = match.isExhibition || (match.stage && typeof match.stage === "string" && match.stage.startsWith("Trận ngoài lề"));
+      const isExhibition = match.isExhibition || (match.stage && typeof match.stage === "string" && match.stage.startsWith("Trận ngoài lề")) || match.id.startsWith("ex_");
       const limitMinutes = match.stage && typeof match.stage === "string" && match.stage.startsWith("Vòng bảng") ? 15 : 7;
       const lockTime = new Date(matchTime.getTime() + limitMinutes * 60 * 1000);
       const isLocked = now > lockTime || match.status === "FINISHED";
@@ -554,31 +553,14 @@ function recalculateAllScores() {
       if (isLocked) {
         const predKey = `${phone}_${match.id}`;
         const pred = db.predictions[predKey];
-
-        if (isExhibition) {
-          // Trận ngoài lề riêng lẻ: Đúng được -1 điểm, Sai hoặc bỏ lỡ bị +1 điểm
+        if (pred) {
           if (match.status === "FINISHED") {
-            if (pred) {
-              if (pred.prediction === match.winner) {
-                deductions += 1; // Khấu trừ -1 điểm vào tổng
-              } else {
-                incorrectCount += 1; // Đoán sai => +1 điểm phạt
-              }
-            } else {
-              incorrectCount += 1; // Bỏ lỡ dự đoán => +1 điểm phạt
+            if (pred.points > 0) {
+              incorrectCount++;
             }
           }
         } else {
-          // Trận đấu chính thức World Cup
-          if (pred) {
-            if (match.status === "FINISHED") {
-              if (pred.points > 0) {
-                incorrectCount++;
-              }
-            }
-          } else {
-            incorrectCount++;
-          }
+          incorrectCount++;
         }
       }
     }
@@ -1445,7 +1427,7 @@ app.post("/api/admin/matches/create-exhibition", (req, res) => {
     visible: true,
     isCustomized: true,
     isExhibition: true,
-    note: note && typeof note === "string" ? note.trim() : "Trận ngoài lề riêng lẻ (Đúng: -1đ | Sai: +1đ)",
+    note: note && typeof note === "string" ? note.trim() : "Trận đấu thêm (Đoán đúng: 0đ | Đoán sai/Bỏ lỡ: +1đ phạt)",
     handicapFavored: handicapFavored && ["HOME", "AWAY", "NONE"].includes(handicapFavored) ? handicapFavored : "NONE",
     handicapValue: handicapValue !== undefined ? Number(handicapValue) || 0 : 0,
   };

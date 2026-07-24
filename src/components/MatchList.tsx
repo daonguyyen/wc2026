@@ -532,7 +532,7 @@ export default function MatchList({
                       )}
                       {m.isExhibition && (
                         <span className="bg-purple-500/20 text-purple-300 text-[8.5px] font-black uppercase px-2 py-0.5 rounded border border-purple-500/40">
-                          ⭐ Trận ngoài lề (Đúng: -1đ | Sai: +1đ)
+                          ⭐ Trận đấu thêm (Đúng: 0đ | Sai: +1đ)
                         </span>
                       )}
                       <span className="text-[11px] font-semibold text-emerald-400">

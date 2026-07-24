@@ -1611,7 +1611,7 @@ export default function AdminPanel({
           <div>
             <h2 className="text-base font-bold text-slate-100 font-display">Tạo Trận Ngoài Lề Riêng Lẻ</h2>
             <p className="text-[11px] text-purple-300 mt-0.5">
-              Tạo trận đấu ngoài lề riêng lẻ với quy tắc tính điểm đặc biệt: <strong>Đoán Đúng được -1 điểm</strong> (khấu trừ) | <strong>Đoán Sai / Bỏ lỡ bị +1 điểm</strong>.
+              Tạo trận đấu ngoài lề / trận đấu thêm từ Admin (<strong>Đoán đúng: 0đ - Không bị cộng điểm</strong> | <strong>Đoán sai / Bỏ lỡ: +1đ phạt</strong>).
             </p>
           </div>
         </div>
